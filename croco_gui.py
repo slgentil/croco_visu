@@ -6,15 +6,19 @@
 import os
 import wx
 import numpy as np
+from numpy.matlib import repmat
+import numpy.ma as ma
+import scipy.io
 import netCDF4 as netcdf
 import matplotlib.pyplot as plt
-import matplotlib
+# import matplotlib
 # matplotlib.use('WXAgg')
 from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigureCanvas
 from matplotlib.figure import Figure
+from matplotlib import colors
+from Croco import Croco
 
 wildcard = "Netcdf Files (*.nc)|*.nc"
-second2day = 1. /86400.
 
 # begin wxGlade: dependencies
 # end wxGlade
@@ -22,6 +26,127 @@ second2day = 1. /86400.
 # begin wxGlade: extracode
 # end wxGlade
 
+########################################################################
+
+class SectionFrame(wx.Frame):
+
+    def __init__(self):
+
+        """Constructor"""
+
+        wx.Frame.__init__(self, None, wx.ID_ANY, title='Section')
+
+        self.panel = wx.Panel(self, wx.ID_ANY)
+
+        self.figure = Figure()
+        self.axes = self.figure.add_axes([0,0,1,1])
+        self.canvas = FigureCanvas(self.panel, -1, self.figure)
+
+        self.AnimationBtn = wx.Button(self.panel, wx.ID_ANY, "Animation")
+        self.AnimationBtn.Bind(wx.EVT_BUTTON, self.onAnimationBtn)
+        self.AnimationTxt = wx.TextCtrl(self.panel, wx.ID_ANY, "1", style=wx.TE_CENTRE|wx.TE_PROCESS_ENTER)
+        self.AnimationTxt.Bind(wx.EVT_TEXT_ENTER, self.onAnimationTxt)
+        self.ZoomInBtn = wx.Button(self.panel, wx.ID_ANY, "Zoom In")
+        self.ZoomInBtn.Bind(wx.EVT_BUTTON, self.onZoomInBtn)
+        self.ZoomOutBtn = wx.Button(self.panel, wx.ID_ANY, "Zoom Out")
+        self.ZoomOutBtn.Bind(wx.EVT_BUTTON, self.onZoomOutBtn)
+        self.PrintBtn = wx.Button(self.panel, wx.ID_ANY, "Print")
+        self.PrintBtn.Bind(wx.EVT_BUTTON, self.onPrintBtn)
+
+        self.__do_layout()
+
+    def __do_layout(self):
+
+        topSizer        = wx.BoxSizer(wx.VERTICAL)
+        canvasSizer     = wx.BoxSizer(wx.VERTICAL)
+        buttonsSizer    = wx.BoxSizer(wx.HORIZONTAL)
+
+
+        canvasSizer.Add(self.canvas, 0, wx.ALL, 5)
+        buttonsSizer.Add(self.AnimationBtn,0, wx.ALL, 5)
+        buttonsSizer.Add(self.AnimationTxt,1, wx.ALL, 5)
+        buttonsSizer.Add(self.ZoomInBtn,0, wx.ALL, 5)
+        buttonsSizer.Add(self.ZoomOutBtn,0, wx.ALL, 5)
+        buttonsSizer.Add(self.PrintBtn,0, wx.ALL, 5)
+
+        topSizer.Add(canvasSizer, 0, wx.CENTER)
+        topSizer.Add(buttonsSizer, 0, wx.ALL|wx.EXPAND, 5)
+
+        self.panel.SetSizer(topSizer)
+        topSizer.Fit(self)
+
+        self.Layout()
+
+    def onAnimationBtn(self,event):
+        print("Animation")
+
+    def onAnimationTxt(self,event):
+        print("AnimationTxt")
+
+    def onZoomInBtn(self,event):
+        print("ZoomInBtn")
+
+    def onZoomOutBtn(self,event):
+        print("ZoomOutBtn")
+
+    def onPrintBtn(self,event):
+        print("Print")
+
+########################################################################
+
+class ProfileFrame(wx.Frame):
+
+    def __init__(self):
+
+        """Constructor"""
+
+        wx.Frame.__init__(self, None, wx.ID_ANY, title='Profile')
+
+        self.panel = wx.Panel(self, wx.ID_ANY)
+
+        self.figure = Figure()
+        self.axes = self.figure.add_axes([0.1,0.1,0.9,0.9])
+        self.canvas = FigureCanvas(self.panel, -1, self.figure)
+
+        self.ZoomInBtn = wx.Button(self.panel, wx.ID_ANY, "Zoom In")
+        self.ZoomInBtn.Bind(wx.EVT_BUTTON, self.onZoomInBtn)
+        self.ZoomOutBtn = wx.Button(self.panel, wx.ID_ANY, "Zoom Out")
+        self.ZoomOutBtn.Bind(wx.EVT_BUTTON, self.onZoomOutBtn)
+        self.PrintBtn = wx.Button(self.panel, wx.ID_ANY, "Print")
+        self.PrintBtn.Bind(wx.EVT_BUTTON, self.onPrintBtn)
+
+        self.__do_layout()
+
+    def __do_layout(self):
+
+        topSizer        = wx.BoxSizer(wx.VERTICAL)
+        canvasSizer     = wx.BoxSizer(wx.VERTICAL)
+        buttonsSizer    = wx.BoxSizer(wx.HORIZONTAL)
+
+
+        canvasSizer.Add(self.canvas, 0, wx.ALL, 5)
+        buttonsSizer.Add(self.ZoomInBtn,0, wx.ALL, 5)
+        buttonsSizer.Add(self.ZoomOutBtn,0, wx.ALL, 5)
+        buttonsSizer.Add(self.PrintBtn,0, wx.ALL, 5)
+
+        topSizer.Add(canvasSizer, 0, wx.CENTER)
+        topSizer.Add(buttonsSizer, 0, wx.ALL|wx.EXPAND, 5)
+
+        self.panel.SetSizer(topSizer)
+        topSizer.Fit(self)
+
+        self.Layout()
+
+    def onZoomInBtn(self,event):
+        print("ZoomInBtn")
+
+    def onZoomOutBtn(self,event):
+        print("ZoomOutBtn")
+
+    def onPrintBtn(self,event):
+        print("Print")
+
+########################################################################
 
 class CrocoGui(wx.Frame):
     def __init__(self, *args, **kwds):
@@ -80,12 +205,13 @@ class CrocoGui(wx.Frame):
 
         self.Panel = wx.Panel(self, wx.ID_ANY, style=wx.BORDER_SIMPLE | wx.TAB_TRAVERSAL)
 
-        # self.figure = Figure()
-        self.figure = plt.figure()
+        self.figure = Figure()
         # self.figure.canvas.mpl_connect('button_press_event', self.onFigureClick)
         self.canvas = FigureCanvas(self.Panel, -1, self.figure)
-        self.canvas.mpl_connect('button_press_event', self.onFigureClick)
-        self.axes = self.figure.add_axes([0,0,1,1])
+        # self.canvas.mpl_connect('button_press_event', self.onFigureClick)
+        # self.canvas.mpl_connect('button_release_event', self.onFigureRelease)
+        # self.axes = self.figure.add_axes([0,0,1,1])
+        # self.axes = self.figure.add_axes([0.1,0.1,0.9,0.9])
 
         self.AnimationBtn = wx.Button(self, wx.ID_ANY, "Animation")
         self.AnimationBtn.Bind(wx.EVT_BUTTON, self.onAnimationBtn)
@@ -100,6 +226,12 @@ class CrocoGui(wx.Frame):
 
         self.__set_properties()
         self.__do_layout()
+
+        # self.xlim = None
+        # self.ylim = None
+        # self.clim = None
+
+        self.sectionFrame = SectionFrame()
 
         self.currentDirectory = os.getcwd()
 
@@ -246,40 +378,52 @@ class CrocoGui(wx.Frame):
         self.OpenFileTxt.SetLabel(paths[0])            
         self.TimeTxt.SetValue(str(self.croco.times[0]))
         self.timeIndex = 0
-        self.LevelTxt.SetValue(str(self.croco.N))
-        self.levelIndex=self.croco.N - 1
+        self.LevelTxt.SetValue(str(self.croco.crocoGrid.N))
+        self.levelIndex=self.croco.crocoGrid.N - 1
         self.CrocoVariableChoice.AppendItems(self.croco.ListOfVariables)
 
 
     def onFigureClick(self,event):
-        print "onFigureClick"
-        self.ix, self.iy = event.xdata, event.ydata
-        print 'x = %d, y = %d'%(ix, iy)
+        self.lonPress, self.latPress = event.xdata, event.ydata
+        print self.lonPress, self.latPress
+        # self.lonPressIndex= min( range( self.croco.crocoGrid.L ), key=lambda j:abs(self.lonPress-self.croco.crocoGrid._lon) )
+        # self.latPressIndex= min( range( self.croco.crocoGrid.M ), key=lambda j:abs(self.latPress-self.croco.crocoGrid._lat) )
+        self.LonSectionTxt.SetValue('%.2F' % self.lonPress)
+        self.LatSectionTxt.SetValue('%.2F' % self.latPress)
 
+    def onFigureRelease(self,event):
+        # self.lonReleaseIndex, self.latReleaseIndex = int(event.xdata), int(event.ydata)
+        self.lonRelease, self.latRelease = event.xdata, event.ydata
+        print self.lonRelease, self.latRelease
+        # self.LonSectionTxt.SetValue('%.2F' % self.latPress)
+        # self.LatSectionTxt.SetValue('%.2F' % self.latPress)
 
     def onCrocoVariableChoice(self, event):
         self.variableName = self.CrocoVariableChoice.GetString(self.CrocoVariableChoice.GetSelection())
         # var = self.CrocoVariableChoice.GetCurrentSelection()
         time = str(self.timeIndex)
         level = str(self.levelIndex)
-        self.variable = self.croco.read_nc(self.variableName, indices= "["+time+","+level+",:,:]")
-        self.mincolor = np.min(self.variable)
+        self.variableXY = self.croco.read_nc(self.variableName, indices= "["+time+","+level+",:,:]")
+        self.clim = [np.min(self.variableXY),np.max(self.variableXY)]
+        self.mincolor = np.min(self.variableXY)
         self.MinColorTxt.SetValue('%.2E' % self.mincolor)
-        self.maxcolor = np.max(self.variable)
+        self.maxcolor = np.max(self.variableXY)
         self.MaxColorTxt.SetValue('%.2E' % self.maxcolor)
+        self.xlim = [np.min(self.croco.crocoGrid._lon),np.max(self.croco.crocoGrid._lon)]
+        self.ylim = [np.min(self.croco.crocoGrid._lat),np.max(self.croco.crocoGrid._lat)]
         self.drawxy()
 
     def onDerivedVariableChoice(self, event):
         self.variableName = self.DerivedVariableChoice.GetString(self.DerivedVariableChoice.GetSelection())
         # time = str(self.timeIndex)
         # level = str(self.levelIndex)
-        # self.variable = self.croco.read_nc(self.variableName, indices= "["+time+","+level+",:,:]")
+        # self.variableXY = self.croco.read_nc(self.variableName, indices= "["+time+","+level+",:,:]")
         # self.draw()
 
     def onResetColorBtn(self,event):
-        self.mincolor = np.min(self.variable)
+        self.mincolor = np.min(self.variableXY)
         self.MinColorTxt.SetValue('%.2E' % self.mincolor)
-        self.maxcolor = np.max(self.variable)
+        self.maxcolor = np.max(self.variableXY)
         self.MaxColorTxt.SetValue('%.2E' % self.maxcolor)
         self.drawxy()
 
@@ -295,11 +439,13 @@ class CrocoGui(wx.Frame):
     def onTimeMinusBtn(self,event):
         self.timeIndex = max(self.timeIndex - 1,0)
         self.TimeTxt.SetValue(str(self.croco.times[self.timeIndex]))
+        self.updateVariableXY()
         self.drawxy()
 
     def onTimePlusBtn(self,event):
-        self.timeIndex = min(self.timeIndex + 1,self.croco.ntimes - 1)
+        self.timeIndex = min(self.timeIndex + 1,self.croco.crocoGrid.ntimes - 1)
         self.TimeTxt.SetValue(str(self.croco.times[self.timeIndex]))
+        self.updateVariableXY()
         self.drawxy()
 
     def onTimeTxt(self,event):
@@ -307,1103 +453,288 @@ class CrocoGui(wx.Frame):
         # find index corresponding to instant time to plot
         self.timeIndex = min( range( len(self.croco.times[:]) ), key=lambda j:abs(time-self.croco.times[j]))
         self.TimeTxt.SetValue(str(self.croco.times[self.timeIndex]))
+        self.updateVariableXY()
         self.drawxy()
 
     def onLevelMinusBtn(self,event):
         self.levelIndex = max(self.levelIndex - 1,0)
         self.LevelTxt.SetValue(str(self.levelIndex + 1))
+        self.updateVariableXY()
         self.drawxy()
 
     def onLevelPlusBtn(self,event):
-        self.levelIndex = min(self.levelIndex + 1,self.croco.N - 1)
+        self.levelIndex = min(self.levelIndex + 1,self.croco.crocoGrid.N - 1)
         self.LevelTxt.SetValue(str(self.levelIndex + 1))
+        self.updateVariableXY()
         self.drawxy()
 
     def onLevelTxt(self,event):
         self.levelIndex = int(self.LevelTxt.GetValue()) - 1
         # var = self.CrocoVariableChoice.GetCurrentSelection()
+        self.updateVariableXY()
         self.drawxy()
 
     def onLonSectionBtn(self,event):
-        print "Lon Section"
+        time = str(self.timeIndex)
+        lon = str(self.lonPressIndex)
+        zeta = self.croco.read_nc('ssh', indices= "["+time+",:,:]")
+        z = self.croco.crocoGrid._scoord2z('r', zeta, alpha=0., beta=0)[0][:,:,self.lonPressIndex]
+        self.variableYZ = self.croco.read_nc(self.variableName, indices= "["+time+",:,:,"+lon+"]")
+        x = repmat(self.croco.crocoGrid._lat[:,self.lonPressIndex].squeeze(),self.croco.crocoGrid.N,1)
+        try:
+            self.sectionFrame.axes.pcolormesh(x,z,self.variableYZ,vmin=self.mincolor, vmax=self.maxcolor)
+        except Exception:
+            self.sectionFrame = SectionFrame()
+            self.sectionFrame.axes.pcolormesh(x,z,self.variableYZ,vmin=self.mincolor, vmax=self.maxcolor)
+
+        self.sectionFrame.canvas.draw()
+        self.sectionFrame.canvas.Refresh()
+        self.sectionFrame.Show()
+
+
 
     def onLonSectionTxt(self,event):
-        print "LonSection txt"
+        print("LonSection txt")
 
     def onLatSectionBtn(self,event):
-        print "Lat Section"
+        time = str(self.timeIndex)
+        lat = str(self.latPressIndex)
+        zeta = self.croco.read_nc('ssh', indices= "["+time+",:,:]")
+        z = self.croco.crocoGrid._scoord2z('r', zeta, alpha=0., beta=0)[0][:,self.latPressIndex,:]
+        self.variableXZ = self.croco.read_nc(self.variableName, indices= "["+time+",:,"+lat+",:]")
+        x = repmat(self.croco.crocoGrid._lon[self.latPressIndex,:].squeeze(),self.croco.crocoGrid.N,1)
+        try:
+            self.sectionFrame.axes.pcolormesh(x,z,self.variableXZ,vmin=self.mincolor, vmax=self.maxcolor)
+        except Exception:
+            self.sectionFrame = SectionFrame()
+            self.sectionFrame.axes.pcolormesh(x,z,self.variableXZ,vmin=self.mincolor, vmax=self.maxcolor)
+        self.sectionFrame.canvas.draw()
+        self.sectionFrame.canvas.Refresh()
+        self.sectionFrame.Show()
 
     def onLatSectionTxt(self,event):
-        print "Lat Section txt"
+        print("Lat Section txt")
 
     def onHovmullerBtn(self,event):
-        print "Lat Section"
+        print("Lat Section")
 
     def onTimeSeriesBtn(self,event):
-        print "Lat Section"
+        lat = str(self.latPressIndex)
+        lon = str(self.lonPressIndex)
+        level = str(self.levelIndex)
+        profile = self.croco.read_nc(self.variableName, indices= "[:,"+level+","+lat+","+lon+"]")
+        try:
+            self.profileFrame.axes.plot(profile)
+        except Exception:
+            self.profileFrame = ProfileFrame()
+            self.profileFrame.axes.plot(profile)
+
+        self.profileFrame.canvas.draw()
+        self.profileFrame.Show()
 
     def onVerticalProfileBtn(self,event):
-        print "Lat Section"
+        time = str(self.timeIndex)
+        lat = str(self.latPressIndex)
+        lon = str(self.lonPressIndex)
+        zeta = self.croco.read_nc('ssh', indices= "["+time+",:,:]")
+        z = self.croco.crocoGrid._scoord2z('r', zeta, alpha=0., beta=0)[0][:,self.latPressIndex,self.lonPressIndex]
+        profile = self.croco.read_nc(self.variableName, indices= "["+time+",:,"+lat+","+lon+"]")
+        try:
+            self.profileFrame.axes.plot(profile,z)
+        except Exception:
+            self.profileFrame = ProfileFrame()
+            self.profileFrame.axes.plot(profile,z)
+
+        self.profileFrame.canvas.draw()
+        self.profileFrame.Show()
+
 
     def onAnimationBtn(self,event):
-        print "Animation"
+        print("Animation")
 
     def onAnimationTxt(self,event):
-        print "AnimationTxt"
+        print("AnimationTxt")
 
     def onZoomInBtn(self,event):
-        print "ZoomInBtn"
+        print("ZoomInBtn")
+        # x1 = min(self.lonPressIndex,self.lonReleaseIndex)
+        # x2 = max(self.lonPressIndex,self.lonReleaseIndex)
+        # y1 = min(self.latPressIndex,self.latReleaseIndex)
+        # y2 = max(self.latPressIndex,self.latReleaseIndex)
+        self.xlim = [min(self.lonPress,self.lonRelease),max(self.lonPress,self.lonRelease)]
+        self.ylim = [ min(self.latPress,self.latRelease),max(self.latPress,self.latRelease)]
+        self.axe.set_xlim(self.xlim[0], self.xlim[1])
+        self.axe.set_ylim(self.ylim[0], self.ylim[1])
 
     def onZoomOutBtn(self,event):
-        print "ZoomOutBtn"
+        print("ZoomOutBtn")
 
     def onPrintBtn(self,event):
-        print "Print"
+        print("Print")
+
+    def updateVariableXY(self):
+        time = str(self.timeIndex)
+        level = str(self.levelIndex)
+        self.variableXY = self.croco.read_nc(self.variableName, indices= "["+time+","+level+",:,:]")
+        self.drawxy()
 
     def drawxy(self):
-        self.axes.pcolormesh(self.variable,vmin=self.mincolor, vmax=self.maxcolor)
+        self.canvas.Destroy()
+        # self.canvas = FigureCanvas(self, -1, self.figure)
+        # self.axes.clear()
+        # try:
+        #     self.cb.remove() # clear colorbar axes
+        # except:
+        #     pass  
+
+        self.mypcolor(self.croco.crocoGrid._lon,self.croco.crocoGrid._lat,self.variableXY,\
+                      xlim=self.xlim,\
+                      ylim=self.ylim,\
+                      clim=self.clim)
+        # self.axes.pcolormesh(self.variableXY,vmin=self.mincolor, vmax=self.maxcolor)
+        # self.canvas.draw()
+        # self.canvas.Refresh()
+
+
+    # -------------------------------------------------------------------------
+    def plotCurv(self,x,y,xlabel=None,ylabel=None,legend=None, title = None, xlog=False, ylog=False):
+        # create a figure
+        # fig = plt.Figure()
+     
+        # and the axes for the figure
+        axes = self.axes
+
+        if y.ndim == 1:
+            if legend is None:
+                axes.plot(x, y, linewidth=2.0)
+            else:
+                axes.plot(x, y, label=legend, linewidth=2.0)
+        else:
+            NbCurv = y.shape[1]
+            for i in range(0,NbCurv):
+                if legend is None:
+                    axes.plot(x, y[:,i], linewidth=2.0)
+                else:
+                    axes.plot(x, y[:,i], label=legend[i], linewidth=2.0)
+
+        axes.figure.set_facecolor('white')
+        axes.grid('on')
+        axes.legend()
+        if xlabel is not None:axes.set_xlabel(xlabel)
+        if ylabel is not None:axes.set_ylabel(ylabel)        
+        if xlog :axes.set_xscale('log')
+        if ylog :axes.set_yscale('log')             
+        if title is not None:axes.set_title(title)
         self.canvas.draw()
+        self.canvas.Refresh()
+
+
+    # -------------------------------------------------------------------------
+    def mypcolor(self,x,y,z, \
+                 x2=None,xlabel2=None, \
+                 xlim=None,ylim=None,clim=None, cformat=None,\
+                 norm=None,\
+                 xlabel=None,ylabel=None,title=None, \
+                 cmap=None, xlog=False, ylog=False, \
+                 z1=None, z2=None, winsize=None, dpi = 80):
+
+        zm = ma.masked_invalid(z)
+        self.figure = Figure()
+        # self.figure.canvas.mpl_connect('button_press_event', self.onFigureClick)
+        self.canvas = FigureCanvas(self.Panel, -1, self.figure)
+        self.canvas.mpl_connect('button_press_event', self.onFigureClick)
+        self.canvas.mpl_connect('button_release_event', self.onFigureRelease)
+        # self.axes = self.figure.add_axes([0,0,1,1])   
+        ax = self.figure.add_subplot(111)  
+        # self.axes = self.figure.add_axes([0.1,0.1,0.9,0.9])
+        # plt.rc('text', usetex=True)
+
+        # # default size if 8 x 6 inch, 80 DPI (640x480 pixels)
+        # if winsize is None:
+        #     winsize=[8., 6.]
+        # fig.set_size_inches( (winsize[0], winsize[1]) )     
+        # ax = self.figure.add_subplot(111)  
+        # ax = self.axes
+        
+        if xlim is None: 
+            ax.set_xlim((np.min(x),np.max(x)))
+        else:
+            ax.set_xlim((xlim[0],xlim[1]))
+        if ylim is None: 
+            ax.set_ylim((np.min(y),np.max(y)))
+        else:
+            ax.set_ylim((ylim[0],ylim[1]))  
+        if xlabel is not None:ax.set_xlabel(xlabel)
+        if ylabel is not None:ax.set_ylabel(ylabel)
+        if title is not None:ax.set_title(title)
+
+        if cmap is None:
+            cmap=self.DefCmap()
+
+        if clim is not None:
+            mesh = ax.pcolormesh(x,y,zm,cmap=cmap,norm=norm, vmin=clim[0], vmax=clim[1])
+        else:
+            mesh = ax.pcolormesh(x,y,zm,cmap=cmap,norm=norm)
+
+        if z1 is not None:
+            # level1 = (z1.min() + z1.max())*0.8
+            level1 = (z1.min() + 0)*0.8
+            cp1 = ax.contour(x, y, z1, [level1], colors='b', linewidths=2)
+        if z2 is not None:
+            # level2 = (z2.min() + z2.max())*0.8
+            level2 = (z2.min() + 0)*0.8
+            cp2 = ax.contour(x, y, z2, [level2], colors='r', linewidths=2)
+
+        # Add colorbar
+        if cformat=='sci':
+            # make sure to specify tick locations to match desired ticklabels
+            self.cb = self.figure.colorbar(mesh, ax=ax, format='%.0e', ticks=[clim[0],clim[0]/10,clim[0]/100, 0, clim[1]/100,clim[1]/10,clim[1]])
+            # plt.colorbar(mesh, ax=ax, format='%.0e')
+        else:
+            self.cb = self.figure.colorbar(mesh, ax=ax)
+
+        if xlog :ax.set_xscale('log')
+        if ylog :ax.set_yscale('log')       
+
+        if x2 is not None: 
+            ax2 = ax.twiny()
+            mn, mx = ax.get_xlim()
+            ax2.set_xlim(2*np.pi/mn*1e-3, 2*np.pi/mx*1e-3)
+            # ax2.set_xlim(2*np.pi/mx, 2*np.pi/mn)
+        if xlabel2 is not None:ax2.set_xlabel(xlabel2)
+        if xlabel2 is not None and xlog :ax2.set_xscale('log')
+
+        font = {'family' : 'normal',
+                'weight' : 'bold',
+                'size'   : 18}
+        plt.rc('font', **font) 
+        self.canvas.draw()
+        self.canvas.Refresh()
+
+    def DefCmap(self):
+        matfile = scipy.io.loadmat('map_64_wc.mat')
+        return self.array2cmap(np.array(matfile['cm']))
+
+    def array2cmap(self,X):
+        N = X.shape[0]
+
+        r = np.linspace(0., 1., N+1)
+        r = np.sort(np.concatenate((r, r)))[1:-1]
+
+        rd = np.concatenate([[X[i, 0], X[i, 0]] for i in xrange(N)])
+        gr = np.concatenate([[X[i, 1], X[i, 1]] for i in xrange(N)])
+        bl = np.concatenate([[X[i, 2], X[i, 2]] for i in xrange(N)])
+
+        rd = tuple([(r[i], rd[i], rd[i]) for i in xrange(2 * N)])
+        gr = tuple([(r[i], gr[i], gr[i]) for i in xrange(2 * N)])
+        bl = tuple([(r[i], bl[i], bl[i]) for i in xrange(2 * N)])
+
+
+        cdict = {'red': rd, 'green': gr, 'blue': bl}
+        return colors.LinearSegmentedColormap('my_colormap', cdict, N)
 
 
 # end of class CrocoGui
-
-
-
-class Croco(object):
-    '''
-    Croco class
-    '''
-    def __init__(self, datafile):
-        '''
-        Initialise the Croco object
-        '''
-        msg = '--- instantiating *%s*' % (datafile)
-        # print(bcolors.OKGREEN + msg + bcolors.ENDC)
-        self.crocofile = datafile
-        self.indices = '[self.j0:self.j1, self.i0:self.i1]'
-        self.i0 = 0
-        self.i1 = None
-        self.j0 = 0
-        self.j1 = None
-        self.k = 0 # to be used as a z index
-        self.t = 0 # to be used as a time index
-        self.r_earth = 6371315. # Mean earth radius in metres (from scalars.h)
-        
-        # An index along either x or y dimension
-        self.ij = None
-
-        self.ListOfVariables = self.list_of_variables()
-        self.times = self.read_nc( "time_instant") * second2day
-        self.ntimes = len(self.times)
-        self.N = self.read_dim_size("s_rho")
-
-    def read_nc(self, varname, indices="[:]"):
-        '''
-        Read data from netcdf file
-          varname : variable ('temp', 'mask_rho', etc) to read
-          indices : string of index ranges, eg. '[0,:,0]'
-        '''
-        try:
-            with netcdf.Dataset(self.crocofile) as nc:
-                var = eval(''.join(("nc.variables[varname]", indices)))
-        except Exception:
-            try:
-                with netcdf.Dataset(self.crocofile[0]) as nc:
-                    var = eval(''.join(("nc.variables[varname]", indices)))
-            except Exception:
-                raise
-        if 'float32' in var.dtype.name:
-            return var.astype(np.float64)
-        else:
-            return var
-
-    def read_nc_mf(self, varname, indices="[:]"):
-        '''
-        Read data from multi-file netcdf file
-          varname : variable ('temp', 'mask_rho', etc) to read
-          indices : string of index ranges, eg. '[0,:,0]'
-        '''
-        try:
-            try:
-                with netcdf.MFDataset(self.filenames) as nc:
-                    var =  eval(''.join(("nc.variables[varname]", indices)))
-            except Exception:
-                with netcdf.MFDataset(self.filenames, aggdim='TIME') as nc:
-                    var =  eval(''.join(("nc.variables[varname]", indices)))
-        except Exception:
-            raise
-        if 'float32' in var.dtype.name:
-            return var.astype(np.float64)
-        else:
-            return var
-
-
-    def read_nc_at_index(self, varname, ind):
-        '''
-        Read data from multi-file netcdf file
-          varname : variable ('temp', 'mask_rho', etc) to read
-          indices : string of index ranges, eg. '[0,:,0]'
-        '''
-        try:
-            with netcdf.Dataset(self.crocofile) as nc:
-                return eval(''.join(("nc.variables[varname]", indices)))
-        except Exception:
-            try:
-                with netcdf.Dataset(self.crocofile[0]) as nc:
-                    return eval(''.join(("nc.variables[varname]", indices)))
-            except Exception:
-                raise Exception
-
-    def read_nc_att(self, varname, att):
-        '''
-        Read data attribute from netcdf file
-          varname : variable ('temp', 'mask_rho', etc) to read
-          att : string of attribute, eg. 'valid_range'
-        '''
-        try:
-            with netcdf.Dataset(self.crocofile) as nc:
-                return eval(''.join(("nc.variables[varname].", att)))
-        except Exception:
-            try:
-                with netcdf.Dataset(self.crocofile[0]) as nc:
-                    return eval(''.join(("nc.variables[varname].", att)))
-            except Exception:
-                raise Exception
-
-    def read_dim_size(self, dim):
-        '''
-        Read dimension size from netcdf file
-          dim : dimension ('time', 'lon_u', etc) to read
-        '''
-        try:
-            with netcdf.Dataset(self.crocofile) as nc:
-                #return len(eval("nc.dimensions[dim]"))
-                return len(nc.dimensions[dim])
-        except Exception:
-            raise
-
-
-    def list_of_variables(self):
-        '''
-        '''
-        datafile = self.crocofile
-        if isinstance(datafile, list):
-            datafile = datafile[0]
-        not_done = True
-        while not_done:
-            try:
-                with netcdf.Dataset(datafile) as nc:
-                    not_done = False
-                    keys = nc.variables.keys()
-            except:
-                time.sleep(0.5)
-        return keys
-
-
-
-    @staticmethod
-    def half_interp(h_one, h_two):
-        '''
-        Speed up frequent operations of type 0.5 * (arr[:-1] + arr[1:])
-        '''
-        return ne.evaluate('0.5 * (h_one + h_two)')
-
-
-    @staticmethod
-    def rho2u_2d(rho_in):
-        '''
-        Convert a 2D field at rho points to a field at u points
-        '''
-        def _r2u(rho_in, Lp):
-            u_out = rho_in[:, :Lp - 1]
-            u_out += rho_in[:, 1:Lp]
-            u_out *= 0.5
-            return u_out.squeeze()
-        assert rho_in.ndim == 2, 'rho_in must be 2d'
-        Mshp, Lshp = rho_in.shape
-        return _r2u(rho_in, Lshp)
-
-    @staticmethod
-    def rho2u_3d(rho_in):
-        '''
-        Convert a 3D field at rho points to a field at u points
-        Calls rho2u_2d
-        '''
-        def levloop(rho_in):
-            Nlevs, Mshp, Lshp = rho_in.shape
-            rho_out = np.zeros((Nlevs, Mshp, Lshp-1))
-            for k in xrange(Nlevs):
-                 rho_out[k] = Croco.rho2u_2d(rho_in[k])
-            return rho_out
-        assert rho_in.ndim == 3, 'rho_in must be 3d'
-        return levloop(rho_in)
-
-    @staticmethod
-    def rho2v_2d(rho_in):
-        '''
-        Convert a 2D field at rho points to a field at v points
-        '''
-        def _r2v(rho_in, Mp):
-            v_out = rho_in[:Mp - 1]
-            v_out += rho_in[1:Mp]
-            v_out *= 0.5
-            return v_out.squeeze()
-        assert rho_in.ndim == 2, 'rho_in must be 2d'
-        Mshp, Lshp = rho_in.shape
-        return _r2v(rho_in, Mshp)
-
-    @staticmethod
-    def rho2v_3d(rho_in):
-        '''
-        Convert a 3D field at rho points to a field at v points
-        Calls rho2v_2d
-        '''
-        def levloop(rho_in):
-            Nlevs, Mshp, Lshp = rho_in.shape
-            rho_out = np.zeros((Nlevs, Mshp-1, Lshp))
-            for k in xrange(Nlevs):
-                 rho_out[k] = Croco.rho2v_2d(rho_in[k])
-            return rho_out
-        assert rho_in.ndim == 3, 'rho_in must be 3d'
-        return levloop(rho_in)
-
-
-    @staticmethod
-    def u2rho_2d(u_in):
-        '''
-        Convert a 2D field at u points to a field at rho points
-        '''
-        def _uu2ur(uu_in, Mp, Lp):
-            L, Lm = Lp - 1, Lp - 2
-            u_out = np.zeros((Mp, Lp))
-            u_out[:, 1:L] = 0.5 * (u_in[:, 0:Lm] + \
-                                   u_in[:, 1:L])
-            u_out[:, 0] = u_out[:, 1]
-            u_out[:, L] = u_out[:, Lm]
-            return u_out.squeeze()
-
-        assert u_in.ndim == 2, 'u_in must be 2d'
-        Mp, Lp = u_in.shape
-        return _uu2ur(u_in, Mp, Lp+1)
-
-    @staticmethod
-    def u2rho_3d(u_in):
-        '''
-        Convert a 3D field at u points to a field at rho points
-        Calls u2rho_2d
-        '''
-        def _levloop(u_in):
-            Nlevs, Mshp, Lshp = u_in.shape
-            u_out = np.zeros((Nlevs, Mshp, Lshp+1))
-            for Nlev in xrange(Nlevs):
-                u_out[Nlev] = Croco.u2rho_2d(u_in[Nlev])
-            return u_out
-        assert u_in.ndim == 3, 'u_in must be 3d'
-        return _levloop(u_in)
-
-    @staticmethod
-    def v2rho_2d(v_in):
-        '''
-        Convert a 2D field at v points to a field at rho points
-        '''
-        def _vv2vr(v_in, Mp, Lp):
-            M, Mm = Mp - 1, Mp - 2
-            v_out = np.zeros((Mp, Lp))
-            v_out[1:M] = 0.5 * (v_in[:Mm] + \
-                                   v_in[1:M])
-            v_out[0] = v_out[1]
-            v_out[M] = v_out[Mm]
-            return v_out.squeeze()
-
-        assert v_in.ndim == 2, 'v_in must be 2d'
-        Mp, Lp = v_in.shape
-        return _vv2vr(v_in, Mp+1, Lp)
-
-    @staticmethod
-    def v2rho_3d(v_in):
-        '''
-        Convert a 3D field at v points to a field at rho points
-        Calls v2rho_2d
-        '''
-        def levloop(v_in):
-            Nlevs, Mshp, Lshp = v_in.shape
-            v_out = np.zeros((Nlevs, Mshp+1, Lshp))
-            for Nlev in xrange(Nlevs):
-                v_out[Nlev] = Croco.v2rho_2d(v_in[Nlev])
-            return v_out
-        assert v_in.ndim == 3, 'v_in must be 3d'
-        return levloop(v_in)
-
-
-    def rotate(self, u_in, v_in, **kwargs):
-        """
-        Rotate velocity vectors
-        'angle' from gridfile
-        """
-        if kwargs.has_key('ob'):
-            if kwargs['ob'] in 'east':
-                angle = self.angle()[:,-1]
-            elif kwargs['ob'] in 'west':
-                angle = self.angle()[:,0]
-            elif kwargs['ob'] in 'north':
-                angle = self.angle()[-1]
-            elif kwargs['ob'] in 'south':
-                angle = self.angle()[0]
-            else:
-                raise Exception
-        else:
-            angle = self.angle()
-        cosa = np.cos(kwargs['sign'] * angle)
-        sina = np.sin(kwargs['sign'] * angle)
-        u_out = (u_in * cosa) + (v_in * sina)
-        v_out = (v_in * cosa) - (u_in * sina)
-        return u_out, v_out
-
-
-    def get_fillmask_cof(self, mask):
-        '''Create (i, j) point arrays for good and bad data.
-            # Bad data are marked by the fill_value, good data elsewhere.
-        '''
-        # CHANGED Jan 14 to include *mask* argument
-        igood = np.vstack(np.where(mask == 1)).T
-        ibad  = np.vstack(np.where(mask == 0)).T
-        tree = sp.cKDTree(igood)
-        # Get the k closest points to the bad points
-        # distance is squared
-        try:
-            dist, iquery = tree.query(ibad, k=4, p=2)
-        except:
-            try:
-                dist, iquery = tree.query(ibad, k=3, p=2)
-            except:
-                try:
-                    dist, iquery = tree.query(ibad, k=2, p=2)
-                except:
-                    dist, iquery = tree.query(ibad, k=1, p=2)
-        self.fillmask_cof = np.array([dist, iquery, igood, ibad])
-        return self
-
-
-    def fillmask(self, x, mask, weights=False):
-        '''
-        Fill missing values in an array with an average of nearest
-        neighbours
-        From http://permalink.gmane.org/gmane.comp.python.scientific.user/19610
-        Input:
-          x : 2-d array to be filled
-          mask : 2-d mask (0s & 1s) same shape as x
-        Output:
-          x : filled x
-          self.fillmask_cof is set
-        '''
-        assert x.ndim == 2, 'x must be a 2D array.'
-        fill_value = 9999.99
-        x[mask == 0] = fill_value
-
-        if isinstance(weights, np.ndarray):
-            dist, iquery, igood, ibad = weights
-        else:
-            self.get_fillmask_cof(mask)
-            dist, iquery, igood, ibad = self.fillmask_cof
-
-        # Create a normalised weight, the nearest points are weighted as 1.
-        #   Points greater than one are then set to zero
-        weight = dist / (dist.min(axis=1)[:, np.newaxis] * np.ones_like(dist))
-        weight[weight > 1.] = 0.
-
-        # Multiply the queried good points by the weight, selecting only
-        #  the nearest points.  Divide by the number of nearest points
-        #  to get average
-        xfill = weight * x[igood[:,0][iquery], igood[:,1][iquery]]
-        xfill = (xfill / weight.sum(axis=1)[:, np.newaxis]).sum(axis=1)
-
-        # Place average of nearest good points, xfill, into bad point locations
-        x[ibad[:,0], ibad[:,1]] = xfill
-
-        if not isinstance(weights, bool):
-            return x
-        else:
-            return x, np.array([dist, iquery, igood, ibad])
-
-
-    def proj2gnom(self, ignore_land_points=False, gtype='rho', index_str=None, M=None):
-        '''
-        Use premade Basemap instance for Gnomonic projection
-          of lon, lat.
-            ignore_land_points : if True returns only lon, lat from sea points.
-            gtype : grid type, one of 'rho', 'u' or 'v'
-            index_str : specifies a boundary.
-            M : Child basemap obj must be passed in for parent projection
-        '''
-        def remove_masked_points(lon, lat, mask):
-            lon, lat = lon[mask == True], lat[mask == True]
-            return lon, lat
-
-        if index_str is not None:
-            glon = eval(''.join(('self.lon()', index_str)))
-            glat = eval(''.join(('self.lat()', index_str)))
-
-            if ignore_land_points:
-                if 'rho' in gtype:
-                    glon, glat = remove_masked_points(glon, glat,
-                             eval(''.join(('self.maskr()', index_str))))
-                elif 'u' in gtype:
-                    glon, glat = remove_masked_points(glon, glat,
-                             eval(''.join(('self.umask()', index_str))))
-                elif 'v' in gtype:
-                    glon, glat = remove_masked_points(glon, glat,
-                             eval(''.join(('self.vmask()', index_str))))
-
-        elif index_str is None and ignore_land_points is True: # exclude masked points
-            glon, glat = remove_masked_points(self.lon(), self.lat(), self.maskr())
-        else:
-            glon, glat = self.lon(), self.lat()
-        if M is None:
-            glon, glat = self.M(glon, glat)
-        else:
-            glon, glat = M(glon, glat)
-        self.points = np.array([glon.ravel(),glat.ravel()]).T
-        return self
-
-
-
-
-
-
-    def make_kdetree(self):
-        ''' Make a parent kde tree that will enable selection
-        minimum numbers of indices necessary to parent grid for
-        successful interpolation to child grid
-        Requires self.points from def proj2gnom
-        '''
-        self.kdetree = sp.cKDTree(self.points)
-        if not hasattr(sp.ckdtree.cKDTree, "query_ball_tree"):
-            print '------ cKDTree.query_ball_tree not found (update of scipy recommended)'
-            self.kdetree = sp.KDTree(self.points)
-        return self
-
-
-
-
-    def make_gnom_transform(self):
-        '''
-        Create Basemap instance for Gnomonic projection
-        Return the transformation, M
-        '''
-        self.M = Basemap(projection = 'gnom',
-                         lon_0=self.lon().mean(), lat_0=self.lat().mean(),
-                         llcrnrlon=self.lon().min(), llcrnrlat=self.lat().min(),
-                         urcrnrlon=self.lon().max(), urcrnrlat=self.lat().max())
-        return self
-
-
-    def child_contained_by_parent(self, child_grid):
-        '''
-        Check that no child data points lie outside of the
-        parent domain.
-        '''
-        tri = sp.Delaunay(self.points) # triangulate full parent
-        tn = tri.find_simplex(child_grid.points)
-        assert not np.any(tn == -1), 'Error: detected child data points outside parent domain'
-        print '------ parent domain suitable for interpolation'
-        return self
-
-
-    def set_subgrid(self, other, k=4):
-        '''
-        Set indices to parent subgrid
-          Parameter:
-            other : another (child) CrocoGrid instance
-        '''
-        def kdt(lon, lat, limits):
-            ppoints = np.array([lon.ravel(), lat.ravel()]).T
-            ptree = sp.cKDTree(ppoints)
-            #print limits
-            pindices = ptree.query(limits, k=k)[1]
-
-            iind, jind = np.array([], dtype=int), np.array([], dtype=int)
-            for pind in pindices.ravel():
-                j, i = np.unravel_index(pind, lon.shape)
-                iind = np.r_[iind, i]
-                jind = np.r_[jind, j]
-            return iind, jind
-
-        if self.zero_crossing is True and 'Croco' not in self.model_type:
-            '''
-            Used by pysoda2roms when there is a zero crossing,
-              eg. at western Med.
-            '''
-            def half_limits(lon, lat):
-                return np.array([np.array([lon.min(), lon.max(),
-                                           lon.max(), lon.min()]),
-                                 np.array([lat.min(), lat.min(),
-                                           lat.max(), lat.max()])]).T
-
-            # Get bounds for -ve part of grid
-            lat = other.lat()[other.lon() < 0.]
-            lon = other.lon()[other.lon() < 0.] + 360.
-            limits = half_limits(lon, lat)
-            iind, jind = kdt(self._lon, self._lat, limits)
-            self.i1 = iind.min()
-            j10, j11 = jind.min(), jind.max()
-
-            # Get bounds for +ve part of grid
-            lat = other.lat()[other.lon() >= 0.]
-            lon = other.lon()[other.lon() >= 0.]
-            limits = half_limits(lon, lat)
-            iind, jind = kdt(self._lon, self._lat, limits)
-            self.i0 = iind.max()
-            j20, j21 = jind.min(), jind.max()
-
-            self.j0 = np.min([j10, j20])
-            self.j1 = np.max([j11, j21])
-            #self.fix_zero_crossing = True
-
-        else:
-            ''' Used for pyroms2roms, and pysoda2roms when
-                there is no zero crossing
-            '''
-            if np.alltrue(other.lon() < 0.) and np.alltrue(self._lon >= 0.):
-                self._lon -= 360.
-            iind, jind = kdt(self._lon, self._lat, other.limits())
-            self.i0, self.i1 = iind.min(), iind.max()
-            self.j0, self.j1 = jind.min(), jind.max()
-        return self
-
-
-    def _get_barotropic_velocity(self, baroclinic_velocity, cell_depths):
-        '''
-        '''
-        sum_baroclinic = (baroclinic_velocity * cell_depths).sum(axis=0)
-        total_depth = cell_depths.sum(axis=0)
-        sum_baroclinic /= total_depth
-        return sum_baroclinic
-
-    def get_barotropic_velocity(self, baroclinic_velocity, cell_depths):
-        '''
-        Input:
-          baroclinic_velocity
-          cell_depths
-        '''
-        return self._get_barotropic_velocity(baroclinic_velocity, cell_depths)
-
-
-    def set_barotropic(self): #, open_boundary):
-        '''
-        '''
-        self.barotropic = self._get_barotropic_velocity(self.dataout,
-                                                        self.romsgrd.scoord2dz())
-        return self
-
-
-
-
-class CrocoGrid (Croco):
-    '''
-    CrocoGrid class (inherits from Croco class)
-    '''
-    def __init__(self, filename, sigma_params, model_type):
-        '''
-
-        '''
-        super(CrocoGrid, self).__init__(filename, model_type)
-        #self.indices = '[self.j0:self.j1, self.i0:self.i1]'
-        self.grid_file = filename
-        self._lon = self.read_nc('lon_rho')#, indices=self.indices)
-        self._lat =  self.read_nc('lat_rho')#, indices=self.indices)
-        self._pm = self.read_nc('pm')#, indices=self.indices)
-        self._pn = self.read_nc('pn')#, indices=self.indices)
-        self._maskr = self.read_nc('mask_rho')#, indices=self.indices)
-        self._angle = self.read_nc('angle')#, indices=self.indices)
-        self._h = self.read_nc('h')#, indices=self.indices)
-        self._hraw = self.read_nc('hraw')#, indices=self.indices)
-        self._f = self.read_nc('f')#, indices=self.indices)
-        self._uvpmask()
-        self.theta_s = np.double(sigma_params['theta_s'])
-        self.theta_b = np.double(sigma_params['theta_b'])
-        self.hc = np.double(sigma_params['hc'])
-        self.N = np.double(sigma_params['N'])
-        self.sc_r = None
-
-
-    def lon(self):   return self._lon[self.j0:self.j1, self.i0:self.i1]
-    def lat(self):   return self._lat[self.j0:self.j1, self.i0:self.i1]
-    def pm(self):    return self._pm[self.j0:self.j1, self.i0:self.i1]
-    def pn(self):    return self._pn[self.j0:self.j1, self.i0:self.i1]
-    def maskr(self): return self._maskr[self.j0:self.j1, self.i0:self.i1]
-    def angle(self): return self._angle[self.j0:self.j1, self.i0:self.i1]
-    def h(self):     return self._h[self.j0:self.j1, self.i0:self.i1]
-    def hraw(self):  return self._hraw[self.j0:self.j1, self.i0:self.i1]
-    def f(self):     return self._f[self.j0:self.j1, self.i0:self.i1]
-
-    def idata(self):
-        return np.nonzero(self.maskr().ravel() == 1.)[0]
-
-    def imask(self):
-        return np.nonzero(self.maskr().ravel() == 0.)[0]
-
-
-    def _uvpmask(self):
-        '''
-        Get mask at u, v, psi points
-        '''
-        try:
-            self._umask = self.read_nc('mask_u')
-        except:
-            #Mp, Lp = self.maskr().shape
-            #print 'Mp',Mp,'  Lp',Lp
-            #Mp -= 1
-            #Lp -= 1
-            #M = Mp - 1
-            #L = Lp - 1
-            self._umask = self.maskr()[:, :-1] * self.maskr()[:, 1:]
-            self._vmask = self.maskr()[:-1]   * self.maskr()[1:]
-            self._pmask = self._umask[:-1] * self._umask[1:]
-        else:
-            self._vmask = self.read_nc('mask_v')
-            self._pmask = self.read_nc('mask_psi')
-        return self
-
-
-    def umask(self):
-        return self._umask
-        # Not sure about all below (29/12/2017) BUT indices needed
-        # for tiled grids...
-        # added '-1' 1/9/2016 cos problem in py_mercator_ini line ~385
-        '''try:
-            return self._umask[self.j0:self.j1, self.i0:self.i1-1]
-        except:
-            return self._umask[self.j0:self.j1, self.i0:-2]'''
-
-
-    def vmask(self):
-        return self._vmask
-        # Not sure about all below (29/12/2017)
-        # added '-1' 1/9/2016 cos problem in py_mercator_ini line ~385
-        '''try:
-            return self._vmask[self.j0:self.j1-1, self.i0:self.i1]
-        except:
-            return self._vmask[self.j0:-2, self.i0:self.i1]'''
-
-
-    def pmask(self):
-        print 'fix me'
-        return self._pmask
-
-
-    def mask3d(self):
-        '''
-        3d stack of mask same size as N
-        '''
-        return np.tile(self.maskr(), (np.int(self.N), 1, 1))
-
-
-    def umask3d(self):
-        '''
-        3d stack of umask same size as N
-        '''
-        return np.tile(self.umask(), (np.int(self.N), 1, 1))
-
-
-    def vmask3d(self):
-        '''
-        3d stack of vmask same size as N
-        '''
-        return np.tile(self.vmask(), (np.int(self.N), 1, 1))
-
-
-    def boundary(self):
-        '''
-        Return lon,lat of perimeter around a Croco grid
-        '''
-        lon = np.hstack((self.lon()[0:, 0], self.lon()[-1, 1:-1],
-                         self.lon()[-1::-1, -1], self.lon()[0, -2::-1]))
-        lat = np.hstack((self.lat()[0:, 0], self.lat()[-1, 1:-1],
-                         self.lat()[-1::-1, -1], self.lat()[0, -2::-1]))
-        return lon, lat
-
-
-    def VertCoordType(self):
-        nc = netcdf.Dataset(self.grdfile, 'r')
-        var = nc.VertCoordType
-        nc.close()
-        return var
-
-    def title(self):
-        nc = netcdf.Dataset(self.grdfile, 'r')
-        var = nc.title
-        nc.close()
-        return var
-
-
-    def check_zero_crossing(self):
-        if np.logical_and(np.any(self.lon() < 0.),
-                          np.any(self.lon() >= 0.)):
-            self.zero_crossing = True
-
-
-    def _scoord2z(self, point_type, zeta, alpha, beta):
-        """
-        z = scoord2z(h, theta_s, theta_b, hc, N, point_type, scoord, zeta)
-        scoord2z finds z at either rho or w points (positive up, zero at rest surface)
-        h          = array of depths (e.g., from grd file)
-        theta_s    = surface focusing parameter
-        theta_b    = bottom focusing parameter
-        hc         = critical depth
-        N          = number of vertical rho-points
-        point_type = 'r' or 'w'
-        scoord     = 'new2008' :new scoord 2008, 'new2006' : new scoord 2006,
-                      or 'old1994' for Song scoord
-        zeta       = sea surface height
-        message    = set to False if don't want message
-        """
-        def CSF(self, sc):
-            '''
-            Allows use of theta_b > 0 (July 2009)
-            '''
-            one64 = np.float64(1)
-            if self.theta_s > 0.:
-                csrf = ((one64 - np.cosh(self.theta_s * sc))
-                           / (np.cosh(self.theta_s) - one64))
-            else:
-                csrf = -sc ** 2
-            sc1 = csrf + one64
-            if self.theta_b > 0.:
-                Cs = ((np.exp(self.theta_b * sc1) - one64)
-                    / (np.exp(self.theta_b) - one64) - one64)
-            else:
-                Cs = csrf
-            return Cs
-        #
-        try:
-            self.scoord
-        except:
-            self.scoord = 'new2008'
-        N = np.float64(self.N.copy())
-        cff1 = 1. / np.sinh(self.theta_s)
-        cff2 = 0.5 / np.tanh(0.5 * self.theta_s)
-        sc_w = (np.arange(N + 1, dtype=np.float64) - N) / N
-        sc_r = ((np.arange(1, N + 1, dtype=np.float64)) - N - 0.5) / N
-        
-        #sc_w = np.arange(-1., 1. / N, 1. / N, dtype=np.float64)
-        #sc_r = 0.5 * (sc_w[1:] + sc_w[:-1])
-        
-        if 'w' in point_type:
-            sc = sc_w
-            N += 1. # add a level
-        else:
-            sc = sc_r
-        #Cs = (1. - self.theta_b) * cff1 * np.sinh(self.theta_s * sc)  \
-                 #+ self.theta_b * (cff2 * np.tanh(self.theta_s * (sc + 0.5)) - 0.5)
-        z  = np.empty((int(N),) + self.h().shape, dtype=np.float64)
-        if self.scoord in 'new2008':
-            Cs = CSF(self, sc)
-        if self.scoord in 'new2006' or self.scoord in 'new2008':
-            hinv = 1. / (self.h() + self.hc)
-            cff = self.hc * sc
-            cff1 = Cs
-            for k in np.arange(N, dtype=int):
-                z[k] = zeta + (zeta + self.h()) * (cff[k] + cff1[k] * self.h()) * hinv
-        elif self.scoord in 'old1994':
-            hinv = 1. / self.h()
-            cff  = self.hc * (sc - Cs)
-            cff1 = Cs
-            cff2 = sc + 1
-            for k in np.arange(N) + 1:
-                z0      = cff[k-1] + cff1[k-1] * self.h()
-                z[k-1, :] = z0 + zeta * (1. + z0 * hinv)
-        else:
-            raise Exception("Unknown scoord, should be 'new2008' or 'old1994'")
-        if self.sc_r is None:
-            self.sc_r = sc_r
-        return z.squeeze(), np.float32(Cs)
-
-
-    def scoord2z_r(self, zeta=0., alpha=0., beta=1.):
-        '''
-        Depths at vertical rho points
-        '''
-        return self._scoord2z('r', zeta=zeta, alpha=alpha, beta=beta)[0]
-
-
-    def Cs_r(self, zeta=0., alpha=0., beta=1.):
-        '''
-        S-coordinate stretching curves at rho points
-        '''
-        return self._scoord2z('r', zeta=zeta, alpha=alpha, beta=beta)[1]
-
-
-    def scoord2z_w(self, zeta=0., alpha=0., beta=1.):
-        '''
-        Depths at vertical w points
-        '''
-        return self._scoord2z('w', zeta=zeta, alpha=alpha, beta=beta)[0]
-
-
-    def Cs_w(self, zeta=0., alpha=0., beta=1.):
-        '''
-        S-coordinate stretching curves at w points
-        '''
-        return self._scoord2z('w', zeta=zeta, alpha=alpha, beta=beta)[1]
-
-    def _set_dz_rho_points(self, zeta=0., alpha=0., beta=1):
-        """
-        Set depths of sigma layers at rho points, 3d matrix.
-        """
-        dz = self._scoord2z('w', zeta=zeta, alpha=alpha, beta=beta)[0]
-        self._dz_rho_points = dz[1:] - dz[:-1]
-
-
-    def scoord2dz(self, zeta=0., alpha=0., beta=1.):
-        """
-        dz at rho points, 3d matrix, depths of sigma layers
-        """
-        dz = self._scoord2z('w', zeta=zeta, alpha=alpha, beta=beta)[0]
-        return dz[1:] - dz[:-1]
-
-    def scoord2dz_u(self, zeta=0., alpha=0., beta=1.):
-        '''
-        dz at u points, 3d matrix, depths of sigma layers
-        '''
-        dz = self.scoord2dz(zeta=0., alpha=0., beta=1.)
-        return self.rho2u_3d(dz)
-
-    def scoord2dz_v(self, zeta=0., alpha=0., beta=1.):
-        '''
-        dz at v points, 3d matrix, depths of sigma layers
-        '''
-        dz = self.scoord2dz(zeta=0., alpha=0., beta=1.)
-        return self.rho2v_3d(dz)
-
-
-
-    def set_bry_dx(self):
-        '''
-        Set dx for all 4 boundaries
-        '''
-        self.set_dx_east()
-        self.set_dx_west()
-        self.set_dx_north()
-        self.set_dx_south()
-        return self
-
-
-    def set_dx_east(self):
-        '''
-        Set dx in m along eastern boundary
-        '''
-        self.dx_east = np.reciprocal(0.5 * (self._pn[:,-1] + self._pn[:,-2]))
-        return self
-
-    def set_dx_west(self):
-        '''
-        Set dx in m along western boundary
-        '''
-        self.dx_west = np.reciprocal(0.5 * (self._pn[:, 0] + self._pn[:, 1]))
-        return self
-
-    def set_dx_south(self):
-        '''
-        Set dx in m along southern boundary
-        '''
-        self.dx_south = np.reciprocal(0.5 * (self._pm[0] + self._pm[1]))
-        return self
-
-    def set_dx_north(self):
-        '''
-        Set dx in m along northern boundary
-        '''
-        self.dx_north = np.reciprocal(0.5 * (self._pm[-1] + self._pm[-2]))
-        return self
-
-
-    def set_bry_maskr(self):
-        '''
-        Set mask for all 4 boundaries
-        '''
-        self.set_maskr_east()
-        self.set_maskr_west()
-        self.set_maskr_north()
-        self.set_maskr_south()
-        return self
-
-
-    def set_maskr_east(self):
-        '''
-        Set dx in m along eastern boundary
-        '''
-        self.maskr_east = self._maskr[:, -1]
-        return self
-
-    def set_maskr_west(self):
-        '''
-        Set dx in m along western boundary
-        '''
-        self.maskr_west = self._maskr[:, 0]
-        return self
-
-    def set_maskr_south(self):
-        '''
-        Set dx in m along southern boundary
-        '''
-        self.maskr_south = self._maskr[0]
-        return self
-
-    def set_maskr_north(self):
-        '''
-        Set maskr along northern boundary
-        '''
-        self.maskr_north = self._maskr[-1]
-        return self
-
-
-    def set_bry_areas(self):
-        '''
-        Set area for all 4 boundaries
-        '''
-        dz = self.scoord2z_w()[1:] - self.scoord2z_w()[:-1]
-        self._set_area_east(dz)
-        self._set_area_west(dz)
-        self._set_area_north(dz)
-        self._set_area_south(dz)
-        return self
-
-
-    def _set_area_east(self, dz):
-        '''
-        Set area in m² along eastern boundary
-        '''
-        dz_east = dz[:,:,-1]
-        dx_east = np.tile(self.dx_east, (dz_east.shape[0], 1))
-        self.area_east = dx_east * dz_east
-        return self
-
-    def _set_area_west(self, dz):
-        '''
-        Set area in m² along western boundary
-        '''
-        dz_west = dz[:,:,0]
-        dx_west = np.tile(self.dx_west, (dz_west.shape[0], 1))
-        self.area_west = dx_west * dz_west
-        return self
-
-    def _set_area_south(self, dz):
-        '''
-        Set area in m² along southern boundary
-        '''
-        dz_south = dz[:,0]
-        dx_south = np.tile(self.dx_south, (dz_south.shape[0], 1))
-        self.area_south = dx_south * dz_south
-        return self
-
-    def _set_area_north(self, dz):
-        '''
-        Set area in m² along northern boundary
-        '''
-        dz_north = dz[:,-1]
-        dx_north = np.tile(self.dx_north, (dz_north.shape[0], 1))
-        self.area_north = dx_north * dz_north
-        return self
-
-
-    def limits(self):
-        '''
-
-        '''
-        return np.array([np.array([self.lon().min(), self.lon().max(),
-                                   self.lon().max(), self.lon().min()]),
-                         np.array([self.lat().min(), self.lat().min(),
-                                   self.lat().max(), self.lat().max()])]).T
-
-
-    def get_map_coordinate_weights(self, czr_bry, pzr_bry):
-        '''
-        Calculate the weights required for the vertical interpolation
-        with vertInterp (map_coordinates)
-        '''
-        assert pzr_bry.shape[1] == czr_bry.shape[1], \
-            'pzr_bry and czr_bry must have the same lengths'
-
-        czr_bry = np.float128(czr_bry)
-        pzr_bry = np.float128(pzr_bry)
-        weights = np.full_like(czr_bry, self.N - 1, dtype=np.float64)
-
-        # Interpolate parent vertical indices at parent depths
-        # to child depths
-        for i in xrange(pzr_bry.shape[1]):
-
-            akima = si.Akima1DInterpolator(pzr_bry[:, i], np.arange(pzr_bry.shape[0]))
-            akima.extrapolate = True
-            akima.extend = True
-            weights[:, i] = akima(czr_bry[:, i])
-
-        return weights
-
-
-    #def get_map_coordinate_weightsXXXXXXXX(self, czr_bry, pzr_bry):
-        #'''
-        #Calculate the weights required for the vertical interpolation
-        #with vertInterp (map_coordinates)
-        #'''
-        #assert pzr_bry.shape[1] == czr_bry.shape[1], \
-            #'pzr_bry and czr_bry must have the same lengths'
-
-        ## For the present purposes, we are assuming that parent-child topo matching
-        ## has been applied along the open boundaries
-        ## THIS IS WRONG
-        #'''assert np.abs((czr_bry[-1][0]-pzw_bry[-1][0])).max() <= 10., \
-            #'max. depth difference between parent and child exceeds 10 m;\n \
-             #has the child topo been matched?'''
-
-        #czr_bry = np.float128(czr_bry)
-        #pzr_bry = np.float128(pzr_bry)
-
-        #weights = np.full_like(czr_bry, self.N-1, dtype=np.float64)
-
-        ## Loop along the boundary
-        #for i in np.arange(pzr_bry.shape[1]):
-            #weight_tmp = np.array([], dtype=np.float64)
-            #dzp = np.diff(pzr_bry[:,i])
-
-            ## Loop from bottom to surface of parent
-            ##for k, dz in enumerate(dzp):
-            #for k in np.arange(pzr_bry.shape[0]):
-
-                ##dz =
-
-                ## If the child has deeper bottom layer than the parent
-                #if k == 0 and np.any(pzr_bry[k,i] > czr_bry[:,i]): # bottom layer
-
-                    #choices = np.nonzero(czr_bry[:,i] < pzr_bry[k,i])[0]
-                    #print 'deeper child bottom depth: chd %s, par %s' %(czr_bry[k,i], pzr_bry[k,i])
-                    #print 'choices bottom', k, choices, choices.shape
-
-                ## If the child has shallower top layer than the parent
-                #elif k == pzr_bry.shape[0] - 1 and np.any(pzr_bry[k,i] < czr_bry[:,i]): # top layer
-
-                    #choices = np.nonzero(czr_bry[:,i] > pzr_bry[k,i])[0]
-                    #print 'choices top', k, choices, choices.shape
-
-                ## Everything in between
-                #else:
-
-                    #choices = np.nonzero(np.logical_and(czr_bry[:,i] < pzr_bry[k,i],
-                                                        #czr_bry[:,i] >= pzr_bry[k-1,i]))[0]
-                    #print 'choices', k, choices, choices.shape
-
-                #for choice in choices:
-                    ##weight     = k + np.abs(np.diff((pzr_bry[k, i], czr_bry[choice, i]))) / dz
-                    #weight = k + ((pzr_bry[k,i] - czr_bry[choice,i]) / dz)
-                    #if k==0:print 'kkk===0000 weight',weight
-                    #weight_tmp = np.append(weight_tmp, weight)
-
-            #print 'weight_tmp', weight_tmp
-            #print 'weight_tmp.shape', weight_tmp.shape, i
-            #try: weights[:-1,i] = weight_tmp
-            #except: weights[:,i] = weight_tmp
-            #print 'weights ---------', weights[:,i]
-            #print '--------'
-        #return weights
 
 
 
