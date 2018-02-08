@@ -385,18 +385,20 @@ class CrocoGui(wx.Frame):
 
     def onFigureClick(self,event):
         self.lonPress, self.latPress = event.xdata, event.ydata
-        print self.lonPress, self.latPress
-        # self.lonPressIndex= min( range( self.croco.crocoGrid.L ), key=lambda j:abs(self.lonPress-self.croco.crocoGrid._lon) )
-        # self.latPressIndex= min( range( self.croco.crocoGrid.M ), key=lambda j:abs(self.latPress-self.croco.crocoGrid._lat) )
+        self.lonPressIndex,self.latPressIndex = self.findLatLonIndex(self.lonPress, self.latPress)
         self.LonSectionTxt.SetValue('%.2F' % self.lonPress)
         self.LatSectionTxt.SetValue('%.2F' % self.latPress)
 
     def onFigureRelease(self,event):
-        # self.lonReleaseIndex, self.latReleaseIndex = int(event.xdata), int(event.ydata)
         self.lonRelease, self.latRelease = event.xdata, event.ydata
-        print self.lonRelease, self.latRelease
-        # self.LonSectionTxt.SetValue('%.2F' % self.latPress)
-        # self.LatSectionTxt.SetValue('%.2F' % self.latPress)
+        self.lonReleaseIndex,self.latReleaseIndex = self.findLatLonIndex(self.lonRelease, self.latRelease)
+
+    def findLatLonIndex(self, lonValue, latValue):
+        ''' Find nearest value is an array '''
+        a = abs(self.croco.crocoGrid._lon - lonValue) + \
+            abs(self.croco.crocoGrid._lat - latValue)
+        return np.unravel_index(a.argmin(),a.shape)
+        # idx,idy = np.where(np.abs(array-value)==np.abs(array-value).min())
 
     def onCrocoVariableChoice(self, event):
         self.variableName = self.CrocoVariableChoice.GetString(self.CrocoVariableChoice.GetSelection())
@@ -556,18 +558,14 @@ class CrocoGui(wx.Frame):
         print("AnimationTxt")
 
     def onZoomInBtn(self,event):
-        print("ZoomInBtn")
-        # x1 = min(self.lonPressIndex,self.lonReleaseIndex)
-        # x2 = max(self.lonPressIndex,self.lonReleaseIndex)
-        # y1 = min(self.latPressIndex,self.latReleaseIndex)
-        # y2 = max(self.latPressIndex,self.latReleaseIndex)
         self.xlim = [min(self.lonPress,self.lonRelease),max(self.lonPress,self.lonRelease)]
         self.ylim = [ min(self.latPress,self.latRelease),max(self.latPress,self.latRelease)]
-        self.axe.set_xlim(self.xlim[0], self.xlim[1])
-        self.axe.set_ylim(self.ylim[0], self.ylim[1])
+        self.drawxy()
 
     def onZoomOutBtn(self,event):
-        print("ZoomOutBtn")
+        self.xlim = [np.min(self.croco.crocoGrid._lon),np.max(self.croco.crocoGrid._lon)]
+        self.ylim = [np.min(self.croco.crocoGrid._lat),np.max(self.croco.crocoGrid._lat)]
+        self.drawxy()
 
     def onPrintBtn(self,event):
         print("Print")
@@ -580,20 +578,10 @@ class CrocoGui(wx.Frame):
 
     def drawxy(self):
         self.canvas.Destroy()
-        # self.canvas = FigureCanvas(self, -1, self.figure)
-        # self.axes.clear()
-        # try:
-        #     self.cb.remove() # clear colorbar axes
-        # except:
-        #     pass  
-
         self.mypcolor(self.croco.crocoGrid._lon,self.croco.crocoGrid._lat,self.variableXY,\
                       xlim=self.xlim,\
                       ylim=self.ylim,\
                       clim=self.clim)
-        # self.axes.pcolormesh(self.variableXY,vmin=self.mincolor, vmax=self.maxcolor)
-        # self.canvas.draw()
-        # self.canvas.Refresh()
 
 
     # -------------------------------------------------------------------------
@@ -704,10 +692,10 @@ class CrocoGui(wx.Frame):
         if xlabel2 is not None:ax2.set_xlabel(xlabel2)
         if xlabel2 is not None and xlog :ax2.set_xscale('log')
 
-        font = {'family' : 'normal',
-                'weight' : 'bold',
-                'size'   : 18}
-        plt.rc('font', **font) 
+        # font = {'family' : 'normal',
+        #         'weight' : 'bold',
+        #         'size'   : 18}
+        # plt.rc('font', **font) 
         self.canvas.draw()
         self.canvas.Refresh()
 
