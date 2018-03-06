@@ -117,6 +117,23 @@ class Croco(object):
             raise
 
 
+    def read_var_dim(self, varname):
+        '''
+        Read data from netcdf file
+          varname : variable ('temp', 'mask_rho', etc) to read
+          indices : string of index ranges, eg. '[0,:,0]'
+        '''
+        try:
+            with netcdf.Dataset(self.crocofile) as nc:
+                dims = nc.variables[varname].dimensions
+        except Exception:
+            try:
+                with netcdf.Dataset(self.crocofile[0]) as nc:
+                    dims = nc.variables[varname].dimensions
+            except Exception:
+                raise
+        return dims
+
     def list_of_variables(self):
         '''
         '''
@@ -299,155 +316,6 @@ class Croco(object):
         return u_out, v_out
 
 
-    def get_fillmask_cof(self, mask):
-        '''Create (i, j) point arrays for good and bad data.
-            # Bad data are marked by the fill_value, good data elsewhere.
-        '''
-        # CHANGED Jan 14 to include *mask* argument
-        igood = np.vstack(np.where(mask == 1)).T
-        ibad  = np.vstack(np.where(mask == 0)).T
-        tree = sp.cKDTree(igood)
-        # Get the k closest points to the bad points
-        # distance is squared
-        try:
-            dist, iquery = tree.query(ibad, k=4, p=2)
-        except:
-            try:
-                dist, iquery = tree.query(ibad, k=3, p=2)
-            except:
-                try:
-                    dist, iquery = tree.query(ibad, k=2, p=2)
-                except:
-                    dist, iquery = tree.query(ibad, k=1, p=2)
-        self.fillmask_cof = np.array([dist, iquery, igood, ibad])
-        return self
-
-
-    def fillmask(self, x, mask, weights=False):
-        '''
-        Fill missing values in an array with an average of nearest
-        neighbours
-        From http://permalink.gmane.org/gmane.comp.python.scientific.user/19610
-        Input:
-          x : 2-d array to be filled
-          mask : 2-d mask (0s & 1s) same shape as x
-        Output:
-          x : filled x
-          self.fillmask_cof is set
-        '''
-        assert x.ndim == 2, 'x must be a 2D array.'
-        fill_value = 9999.99
-        x[mask == 0] = fill_value
-
-        if isinstance(weights, np.ndarray):
-            dist, iquery, igood, ibad = weights
-        else:
-            self.get_fillmask_cof(mask)
-            dist, iquery, igood, ibad = self.fillmask_cof
-
-        # Create a normalised weight, the nearest points are weighted as 1.
-        #   Points greater than one are then set to zero
-        weight = dist / (dist.min(axis=1)[:, np.newaxis] * np.ones_like(dist))
-        weight[weight > 1.] = 0.
-
-        # Multiply the queried good points by the weight, selecting only
-        #  the nearest points.  Divide by the number of nearest points
-        #  to get average
-        xfill = weight * x[igood[:,0][iquery], igood[:,1][iquery]]
-        xfill = (xfill / weight.sum(axis=1)[:, np.newaxis]).sum(axis=1)
-
-        # Place average of nearest good points, xfill, into bad point locations
-        x[ibad[:,0], ibad[:,1]] = xfill
-
-        if not isinstance(weights, bool):
-            return x
-        else:
-            return x, np.array([dist, iquery, igood, ibad])
-
-
-    def proj2gnom(self, ignore_land_points=False, gtype='rho', index_str=None, M=None):
-        '''
-        Use premade Basemap instance for Gnomonic projection
-          of lon, lat.
-            ignore_land_points : if True returns only lon, lat from sea points.
-            gtype : grid type, one of 'rho', 'u' or 'v'
-            index_str : specifies a boundary.
-            M : Child basemap obj must be passed in for parent projection
-        '''
-        def remove_masked_points(lon, lat, mask):
-            lon, lat = lon[mask == True], lat[mask == True]
-            return lon, lat
-
-        if index_str is not None:
-            glon = eval(''.join(('self.lon()', index_str)))
-            glat = eval(''.join(('self.lat()', index_str)))
-
-            if ignore_land_points:
-                if 'rho' in gtype:
-                    glon, glat = remove_masked_points(glon, glat,
-                             eval(''.join(('self.maskr()', index_str))))
-                elif 'u' in gtype:
-                    glon, glat = remove_masked_points(glon, glat,
-                             eval(''.join(('self.umask()', index_str))))
-                elif 'v' in gtype:
-                    glon, glat = remove_masked_points(glon, glat,
-                             eval(''.join(('self.vmask()', index_str))))
-
-        elif index_str is None and ignore_land_points is True: # exclude masked points
-            glon, glat = remove_masked_points(self.lon(), self.lat(), self.maskr())
-        else:
-            glon, glat = self.lon(), self.lat()
-        if M is None:
-            glon, glat = self.M(glon, glat)
-        else:
-            glon, glat = M(glon, glat)
-        self.points = np.array([glon.ravel(),glat.ravel()]).T
-        return self
-
-
-
-
-
-
-    def make_kdetree(self):
-        ''' Make a parent kde tree that will enable selection
-        minimum numbers of indices necessary to parent grid for
-        successful interpolation to child grid
-        Requires self.points from def proj2gnom
-        '''
-        self.kdetree = sp.cKDTree(self.points)
-        if not hasattr(sp.ckdtree.cKDTree, "query_ball_tree"):
-            print('------ cKDTree.query_ball_tree not found (update of scipy recommended)')
-            self.kdetree = sp.KDTree(self.points)
-        return self
-
-
-
-
-    def make_gnom_transform(self):
-        '''
-        Create Basemap instance for Gnomonic projection
-        Return the transformation, M
-        '''
-        self.M = Basemap(projection = 'gnom',
-                         lon_0=self.lon().mean(), lat_0=self.lat().mean(),
-                         llcrnrlon=self.lon().min(), llcrnrlat=self.lat().min(),
-                         urcrnrlon=self.lon().max(), urcrnrlat=self.lat().max())
-        return self
-
-
-    def child_contained_by_parent(self, child_grid):
-        '''
-        Check that no child data points lie outside of the
-        parent domain.
-        '''
-        tri = sp.Delaunay(self.points) # triangulate full parent
-        tn = tri.find_simplex(child_grid.points)
-        assert not np.any(tn == -1), 'Error: detected child data points outside parent domain'
-        print('------ parent domain suitable for interpolation')
-        return self
-
-
     def _get_barotropic_velocity(self, baroclinic_velocity, cell_depths):
         '''
         '''
@@ -502,7 +370,7 @@ class CrocoGrid (Croco):
 	        self._h = self.read_nc('h')#, indices=self.indices)
 	        # self._hraw = self.read_nc('hraw')#, indices=self.indices)
 	        self._f = self.read_nc('f')#, indices=self.indices)
-	        # self._uvpmask()
+	        self._uvpmask()
 	        self.theta_s = self.read_nc('theta_s')
 	        self.theta_b = self.read_nc('theta_b')
 	        self.hc = self.read_nc('hc')
@@ -622,11 +490,6 @@ class CrocoGrid (Croco):
         nc.close()
         return var
 
-
-    def check_zero_crossing(self):
-        if np.logical_and(np.any(self.lon() < 0.),
-                          np.any(self.lon() >= 0.)):
-            self.zero_crossing = True
 
 
     def _scoord2z(self, point_type, zeta, alpha, beta):
@@ -765,230 +628,135 @@ class CrocoGrid (Croco):
 
 
 
-    def set_bry_dx(self):
-        '''
-        Set dx for all 4 boundaries
-        '''
-        self.set_dx_east()
-        self.set_dx_west()
-        self.set_dx_north()
-        self.set_dx_south()
-        return self
+    # def get_depths(self,fname,tindex,type):
+
+    #     zeta=0.*self.h
+
+    #     # open history file
+    #     #
+    #     if os.path.isfile(fname):
+    #       nc=Dataset(fname, 'r')
+    #       ncvars = nc.variables.keys() 
+    #       if "zeta" in ncvars:
+    #         zeta=np.squeeze(nc.variables['zeta'][tindex,:,:])
+    #       nc.close()
+
+    #     vtype=type
+    #     if (type=='u')|(type=='v'):
+    #       vtype='r'
+    #     z=self.zlevs(zeta,vtype)
+    #     if type=='u':
+    #       z=rho2u_3d(z)
+    #     if type=='v':
+    #       z=rho2v_3d(z)
+    #     return z
 
 
-    def set_dx_east(self):
-        '''
-        Set dx in m along eastern boundary
-        '''
-        self.dx_east = np.reciprocal(0.5 * (self._pn[:,-1] + self._pn[:,-2]))
-        return self
 
-    def set_dx_west(self):
-        '''
-        Set dx in m along western boundary
-        '''
-        self.dx_west = np.reciprocal(0.5 * (self._pn[:, 0] + self._pn[:, 1]))
-        return self
-
-    def set_dx_south(self):
-        '''
-        Set dx in m along southern boundary
-        '''
-        self.dx_south = np.reciprocal(0.5 * (self._pm[0] + self._pm[1]))
-        return self
-
-    def set_dx_north(self):
-        '''
-        Set dx in m along northern boundary
-        '''
-        self.dx_north = np.reciprocal(0.5 * (self._pm[-1] + self._pm[-2]))
-        return self
+    # def zlevs(self,zeta=0,type='r'):
+    #   ################################################################
+    #   #
+    #   #  function z = zlevs(h,zeta,theta_s,theta_b,hc,N,type,vtransform)
+    #   #
+    #   #  this function compute the depth of rho or w points for ROMS
+    #   #
+    #   #  On Input:
+    #   #
+    #   #    type    'r': rho point 'w': w point 
+    #   #    vtransform  1=> old v transform (Song, 1994) 
+    #   #                2=> new v transform (Shcheptekin, 2006)
+    #   #  On Output:
+    #   #
+    #   #    z       Depths (m) of RHO- or W-points (3D matrix).
+    #   # 
+    #   ################################################################
 
 
-    def set_bry_maskr(self):
-        '''
-        Set mask for all 4 boundaries
-        '''
-        self.set_maskr_east()
-        self.set_maskr_west()
-        self.set_maskr_north()
-        self.set_maskr_south()
-        return self
+    #     #
+    #     # Create S-coordinate system: based on model topography h(i,j),
+    #     # fast-time-averaged free-surface field and vertical coordinate
+    #     # transformation metrics compute evolving depths of of the three-
+    #     # dimensional model grid. Also adjust zeta for dry cells.
+    #     # 
+    #     h=np.where(self.h == 0., 1.e-2, self.h)  
+    #     Dcrit=0.01   # min water depth in dry cells
+    #     mask = np.where(zeta<(Dcrit-h))
+    #     zeta[mask]=Dcrit-h[mask]
+    #     #
+    #     hinv=1./h
+    #     z=np.zeros((self.N,self.M,self.L))
+    #     # if self.Vtransform == 2 :
+    #     if type=='w':
+    #         cff1=np.squeeze(self.Cs_w)
+    #         cff2=self.sc_w+1
+    #         sc=self.sc_w
+    #     else:
+    #         cff1=np.squeeze(self.Cs_r)
+    #         cff2=self.sc_r+1
+    #         sc=self.sc_r
+    #     h2=(h+self.hc)
+    #     cff=np.squeeze(self.hc*sc)
+    #     h2inv=1./h2
+    #     for k in range(0,self.N):
+    #         z0=cff[k]+cff1[k]*h
+    #         z[k,:,:]=z0*h/(h2) + zeta*(1.+z0*h2inv)
+    #     # else:
+    #     #     cff1=self.Cs
+    #     #     cff2=self.sc+1
+    #     #     cff=self.hc*(self.sc-self.Cs)
+    #     #     cff2=self.sc+1
+    #     #     for k in range(0,self.N):
+    #     #         z0=cff[k]+cff1[k]*h
+    #     #         z[k,:,:]=z0+zeta*(1.+z0*hinv)
 
 
-    def set_maskr_east(self):
-        '''
-        Set dx in m along eastern boundary
-        '''
-        self.maskr_east = self._maskr[:, -1]
-        return self
+    #     return z
 
-    def set_maskr_west(self):
-        '''
-        Set dx in m along western boundary
-        '''
-        self.maskr_west = self._maskr[:, 0]
-        return self
+    def zslice(self,var,mask,z,depth,findlev=False):
+        """
+        #
+        #
+        # This function interpolate a 3D variable on a horizontal level of constant
+        # depth
+        #
+        # On Input:  
+        # 
+        #    var     Variable to process (3D matrix).
+        #    z       Depths (m) of RHO- or W-points (3D matrix).
+        #    depth   Slice depth (scalar meters, negative).
+        # 
+        # On Output: 
+        #
+        #    vnew    Horizontal slice (2D matrix). 
+        #
+        #
+        """
+        [N,Mp,Lp]=z.shape
 
-    def set_maskr_south(self):
-        '''
-        Set dx in m along southern boundary
-        '''
-        self.maskr_south = self._maskr[0]
-        return self
+        #
+        # Find the grid position of the nearest vertical levels
+        #
+        a=np.where(z<=depth,1,0)
+        levs=np.squeeze(np.sum(a,axis=0)) - 1
+        levs = np.where(levs==N-1,N-2,levs)
+        levs = np.where(levs==-1,0,levs)
+        minlev = np.min(levs)
+        maxlev = np.max(levs)
+        if findlev==True:
+            return minlev,maxlev
 
-    def set_maskr_north(self):
-        '''
-        Set maskr along northern boundary
-        '''
-        self.maskr_north = self._maskr[-1]
-        return self
+        # Do the interpolation
+        z1 = np.zeros_like(z[0,:,:])
+        z2 = np.zeros_like(z[0,:,:])
+        v1 = np.zeros_like(z[0,:,:])
+        v2 = np.zeros_like(z[0,:,:])
+        for j in range(Mp):
+            for i in range(Lp):
+                k = levs[j,i]
+                z1[j,i] = z[k+1,j,i]
+                z2[j,i] = z[k,j,i]
+                v1[j,i] = var[k+1,j,i]
+                v2[j,i] = var[k,j,i]
+        vnew=mask*(((v1-v2)*depth+v2*z1-v1*z2)/(z1-z2))
+        return vnew,minlev,maxlev
 
-
-    def set_bry_areas(self):
-        '''
-        Set area for all 4 boundaries
-        '''
-        dz = self.scoord2z_w()[1:] - self.scoord2z_w()[:-1]
-        self._set_area_east(dz)
-        self._set_area_west(dz)
-        self._set_area_north(dz)
-        self._set_area_south(dz)
-        return self
-
-
-    def _set_area_east(self, dz):
-        '''
-        Set area in m² along eastern boundary
-        '''
-        dz_east = dz[:,:,-1]
-        dx_east = np.tile(self.dx_east, (dz_east.shape[0], 1))
-        self.area_east = dx_east * dz_east
-        return self
-
-    def _set_area_west(self, dz):
-        '''
-        Set area in m² along western boundary
-        '''
-        dz_west = dz[:,:,0]
-        dx_west = np.tile(self.dx_west, (dz_west.shape[0], 1))
-        self.area_west = dx_west * dz_west
-        return self
-
-    def _set_area_south(self, dz):
-        '''
-        Set area in m² along southern boundary
-        '''
-        dz_south = dz[:,0]
-        dx_south = np.tile(self.dx_south, (dz_south.shape[0], 1))
-        self.area_south = dx_south * dz_south
-        return self
-
-    def _set_area_north(self, dz):
-        '''
-        Set area in m² along northern boundary
-        '''
-        dz_north = dz[:,-1]
-        dx_north = np.tile(self.dx_north, (dz_north.shape[0], 1))
-        self.area_north = dx_north * dz_north
-        return self
-
-
-    def limits(self):
-        '''
-
-        '''
-        return np.array([np.array([self.lon().min(), self.lon().max(),
-                                   self.lon().max(), self.lon().min()]),
-                         np.array([self.lat().min(), self.lat().min(),
-                                   self.lat().max(), self.lat().max()])]).T
-
-
-    def get_map_coordinate_weights(self, czr_bry, pzr_bry):
-        '''
-        Calculate the weights required for the vertical interpolation
-        with vertInterp (map_coordinates)
-        '''
-        assert pzr_bry.shape[1] == czr_bry.shape[1], \
-            'pzr_bry and czr_bry must have the same lengths'
-
-        czr_bry = np.float128(czr_bry)
-        pzr_bry = np.float128(pzr_bry)
-        weights = np.full_like(czr_bry, self.N - 1, dtype=np.float64)
-
-        # Interpolate parent vertical indices at parent depths
-        # to child depths
-        for i in xrange(pzr_bry.shape[1]):
-
-            akima = si.Akima1DInterpolator(pzr_bry[:, i], np.arange(pzr_bry.shape[0]))
-            akima.extrapolate = True
-            akima.extend = True
-            weights[:, i] = akima(czr_bry[:, i])
-
-        return weights
-
-
-    #def get_map_coordinate_weightsXXXXXXXX(self, czr_bry, pzr_bry):
-        #'''
-        #Calculate the weights required for the vertical interpolation
-        #with vertInterp (map_coordinates)
-        #'''
-        #assert pzr_bry.shape[1] == czr_bry.shape[1], \
-            #'pzr_bry and czr_bry must have the same lengths'
-
-        ## For the present purposes, we are assuming that parent-child topo matching
-        ## has been applied along the open boundaries
-        ## THIS IS WRONG
-        #'''assert np.abs((czr_bry[-1][0]-pzw_bry[-1][0])).max() <= 10., \
-            #'max. depth difference between parent and child exceeds 10 m;\n \
-             #has the child topo been matched?'''
-
-        #czr_bry = np.float128(czr_bry)
-        #pzr_bry = np.float128(pzr_bry)
-
-        #weights = np.full_like(czr_bry, self.N-1, dtype=np.float64)
-
-        ## Loop along the boundary
-        #for i in np.arange(pzr_bry.shape[1]):
-            #weight_tmp = np.array([], dtype=np.float64)
-            #dzp = np.diff(pzr_bry[:,i])
-
-            ## Loop from bottom to surface of parent
-            ##for k, dz in enumerate(dzp):
-            #for k in np.arange(pzr_bry.shape[0]):
-
-                ##dz =
-
-                ## If the child has deeper bottom layer than the parent
-                #if k == 0 and np.any(pzr_bry[k,i] > czr_bry[:,i]): # bottom layer
-
-                    #choices = np.nonzero(czr_bry[:,i] < pzr_bry[k,i])[0]
-                    #print 'deeper child bottom depth: chd %s, par %s' %(czr_bry[k,i], pzr_bry[k,i])
-                    #print 'choices bottom', k, choices, choices.shape
-
-                ## If the child has shallower top layer than the parent
-                #elif k == pzr_bry.shape[0] - 1 and np.any(pzr_bry[k,i] < czr_bry[:,i]): # top layer
-
-                    #choices = np.nonzero(czr_bry[:,i] > pzr_bry[k,i])[0]
-                    #print 'choices top', k, choices, choices.shape
-
-                ## Everything in between
-                #else:
-
-                    #choices = np.nonzero(np.logical_and(czr_bry[:,i] < pzr_bry[k,i],
-                                                        #czr_bry[:,i] >= pzr_bry[k-1,i]))[0]
-                    #print 'choices', k, choices, choices.shape
-
-                #for choice in choices:
-                    ##weight     = k + np.abs(np.diff((pzr_bry[k, i], czr_bry[choice, i]))) / dz
-                    #weight = k + ((pzr_bry[k,i] - czr_bry[choice,i]) / dz)
-                    #if k==0:print 'kkk===0000 weight',weight
-                    #weight_tmp = np.append(weight_tmp, weight)
-
-            #print 'weight_tmp', weight_tmp
-            #print 'weight_tmp.shape', weight_tmp.shape, i
-            #try: weights[:-1,i] = weight_tmp
-            #except: weights[:,i] = weight_tmp
-            #print 'weights ---------', weights[:,i]
-            #print '--------'
-        #return weights

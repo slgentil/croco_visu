@@ -18,14 +18,20 @@ from matplotlib import colors
 
 
 # -------------------------------------------------------------------------
-def plotCurv(axes,x,y,xlabel=None,ylabel=None,legend=None, title = None, xlog=False, ylog=False):
+def plotCurv(fig,x,y=None,xlabel=None,ylabel=None,legend=None, title = None, xlog=False, ylog=False):
 # create a figure
 # fig = plt.Figure()
 
 # and the axes for the figure
-# axes = self.axes
+	axes = fig.add_axes([0.07,0.05,0.98,0.90])
+	# axes = self.axes
 
-	if y.ndim == 1:
+	if y is None:
+		if legend is None:
+			axes.plot(x, linewidth=2.0)
+		else:
+			axes.plot(x, label=legend, linewidth=2.0)
+	elif y.ndim == 1:
 	    if legend is None:
 	        axes.plot(x, y, linewidth=2.0)
 	    else:
@@ -46,8 +52,6 @@ def plotCurv(axes,x,y,xlabel=None,ylabel=None,legend=None, title = None, xlog=Fa
 	if xlog :axes.set_xscale('log')
 	if ylog :axes.set_yscale('log')             
 	if title is not None:axes.set_title(title)
-	self.canvas.draw()
-	self.canvas.Refresh()
 
 
 # -------------------------------------------------------------------------
@@ -66,7 +70,7 @@ def mypcolor(fig,x,y,z, \
 	# if winsize is None:
 	#     winsize=[8., 6.]
 	# fig.set_size_inches( (winsize[0], winsize[1]) ) 
-	ax = fig.add_axes([0.07,0.05,0.98,0.90])
+	ax = fig.add_axes([0.15,0.1,0.85,0.85])
 
 	if xlim is None: 
 	    ax.set_xlim((np.min(x),np.max(x)))
