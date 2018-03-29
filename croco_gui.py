@@ -36,13 +36,14 @@ figsize = [6,5]
 
 class SectionFrame(wx.Frame):
 
-    def __init__(self,typSection):
+    def __init__(self,typSection="XY",croco=None):
 
         """Constructor"""
 
         wx.Frame.__init__(self, None, wx.ID_ANY, title='Section')
 
         self.typSection=typSection
+        self.croco = croco
         self.panel = wx.Panel(self, wx.ID_ANY)
 
         self.figure = Figure()
@@ -112,6 +113,7 @@ class SectionFrame(wx.Frame):
             os.makedirs('./Figures')
         except:
             pass
+        self.clim = [np.min(self.variableZ),np.max(self.variableZ)]
         save_count = self.endTimeIndex - self.startTimeIndex + 1
         anim = animation.FuncAnimation(self.figure, self.animate, \
                    frames = range(self.startTimeIndex,self.endTimeIndex+1), repeat=False, \
@@ -121,7 +123,7 @@ class SectionFrame(wx.Frame):
         
     def animate( self, i):
         self.timeIndex = i
-        self.updateVariableZ()
+        self.updateVariableZ(setlim=False)
 
     def onstartTimeTxt(self,event):
         print("startTimeTxt")
@@ -157,17 +159,17 @@ class SectionFrame(wx.Frame):
         self.clim[1] = float(self.MaxColorTxt.GetValue())
         self.drawz(setlim=False)
 
-    def updateVariableZ(self):
+    def updateVariableZ(self,setlim=True):
         time = str(self.timeIndex)
-        if self.typSection=="xz":
-            indices="["+time+",:,:,",self.latlonIndex,"]"
+        if self.typSection=="YZ":
+            indices="["+time+",:,:,"+str(self.latlonIndex)+"]"
         else:        
-            indices="["+time+",:,",self.latlonIndex,",:]"
+            indices="["+time+",:,"+str(self.latlonIndex)+",:]"
         try:
             self.variableZ = self.croco.read_nc(self.variableName, indices= indices)
         except Exception:
             raise Exception
-        self.drawz()
+        self.drawz(setlim=setlim)
 
     def drawz(self, setlim=True):
         self.figure.clf()
@@ -188,7 +190,7 @@ class SectionFrame(wx.Frame):
         title = "{:s}, {:s}={:4.1f}, Time={:4.1f}".format(self.variableName,self.section,self.latlon,self.time)
         mypcolor(self.figure,self.x,self.y,self.variableZ,\
                       title=title,\
-                      xlabel=self.section,\
+                      xlabel=self.xlabel,\
                       ylabel='Depth',\
                       xlim=self.xlim,\
                       ylim=self.ylim,\
@@ -344,7 +346,7 @@ class CrocoGui(wx.Frame):
         # self.__set_properties()
         self.__do_layout()
 
-        self.sectionXY = SectionFrame("XY")
+        self.sectionXY = SectionFrame()
 
         self.currentDirectory = os.getcwd()
 
@@ -609,13 +611,14 @@ class CrocoGui(wx.Frame):
         try:
             self.sectionYZ.IsShown()
         except:
-            self.sectionYZ = SectionFrame("YZ")
+            self.sectionYZ = SectionFrame(typSection="YZ", croco=self.croco)
         time = str(self.timeIndex)
         lon = str(self.lonPressIndex)
         zeta = self.croco.read_nc('ssh', indices= "["+time+",:,:]")
         self.sectionYZ.y = self.croco.crocoGrid.scoord2z_r(zeta, alpha=0., beta=0)[:,:,self.lonPressIndex]
         self.sectionYZ.variableName = self.variableName
         self.sectionYZ.section = "Longitude"
+        self.sectionYZ.xlabel = "Latitude"
         self.sectionYZ.latlon = self.lonPress
         self.sectionYZ.latlonIndex = self.lonPressIndex
         self.sectionYZ.time = self.time
@@ -639,12 +642,13 @@ class CrocoGui(wx.Frame):
         try:
             self.sectionYZ.IsShown()
         except:
-            self.sectionYZ = SectionFrame()
+            self.sectionYZ = SectionFrame(typSection="YZ", croco=self.croco)
         time = str(self.timeIndex)
         lon = str(self.lonPressIndex)
         zeta = self.croco.read_nc('ssh', indices= "["+time+",:,:]")
         self.sectionYZ.variableName = self.variableName
         self.sectionYZ.section = "Longitude"
+        self.sectionYZ.xlabel = "Latitude"
         self.sectionYZ.latlon = self.lonPress
         self.sectionYZ.latlonIndex = self.lonPressIndex
         self.sectionYZ.time = self.time
@@ -660,14 +664,15 @@ class CrocoGui(wx.Frame):
         try:
             self.sectionXZ.IsShown()
         except:
-            self.sectionXZ = SectionFrame("XZ")
+            self.sectionXZ = SectionFrame(typSection="XZ", croco=self.croco)
         time = str(self.timeIndex)
         lat = str(self.latPressIndex)
         zeta = self.croco.read_nc('ssh', indices= "["+time+",:,:]")
         self.sectionXZ.variableName = self.variableName
         self.sectionXZ.section = "Latitude"
+        self.sectionXZ.xlabel = "Longitude"
         self.sectionXZ.latlon = self.latPress
-        self.sectionYZ.latlonIndex = self.latPressIndex
+        self.sectionXZ.latlonIndex = self.latPressIndex
         self.sectionXZ.time = self.time
         self.sectionXZ.y = self.croco.crocoGrid.scoord2z_r(zeta, alpha=0., beta=0)[:,self.latPressIndex,:]
         self.sectionXZ.variableZ = self.croco.read_nc(self.variableName, indices= "["+time+",:,"+lat+",:]")
@@ -696,8 +701,9 @@ class CrocoGui(wx.Frame):
         zeta = self.croco.read_nc('ssh', indices= "["+time+",:,:]")
         self.sectionXZ.variableName = self.variableName
         self.sectionXZ.section = "Latitude"
+        self.sectionXZ.xlabel = "Longitude"
         self.sectionXZ.latlon = self.latPress
-        self.sectionYZ.latlonIndex = self.latPressIndex
+        self.sectionXZ.latlonIndex = self.latPressIndex
         self.sectionXZ.time = self.time
         self.sectionXZ.y = self.croco.crocoGrid._scoord2z('r', zeta, alpha=0., beta=0)[0][:,self.latPressIndex,:]
         self.sectionXZ.variableZ = self.croco.read_nc(self.variableName, indices= "["+time+",:,"+lat+",:]")
