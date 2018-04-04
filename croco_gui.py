@@ -19,6 +19,7 @@ from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigureCanvas
 from matplotlib.figure import Figure
 from matplotlib import colors
 from matplotlib import animation
+from matplotlib.widgets  import RectangleSelector
 from Croco import Croco
 from myplot import plotCurv, mypcolor
 
@@ -49,6 +50,9 @@ class SectionFrame(wx.Frame):
         self.figure = Figure()
         self.axes = self.figure.add_axes([0,0,1,1])
         self.canvas = FigureCanvas(self.panel, -1, self.figure)
+        self.canvas.mpl_connect('button_press_event', self.onFigureClick)
+        self.canvas.mpl_connect('button_release_event', self.onFigureRelease)
+        # self.canvas.mpl_connect('motion_notify_event', self.onFigureMotion)
 
         self.AnimationBtn = wx.Button(self.panel, wx.ID_ANY, "Animation")
         self.AnimationBtn.Bind(wx.EVT_BUTTON, self.onAnimationBtn)
@@ -102,10 +106,22 @@ class SectionFrame(wx.Frame):
 
     def onFigureClick(self,event):
         self.xPress, self.yPress = event.xdata, event.ydata
+        print('onFigureClick:',self.xPress, self.yPress)
+        # rs = RectangleSelector(self.figure.gca(), self.rect_select_callback,
+        #                drawtype='box', useblit=False, button=[1], 
+        #                minspanx=5, minspany=5, spancoords='pixels', 
+        #                interactive=True)
 
     def onFigureRelease(self,event):
         self.xRelease, self.yRelease = event.xdata, event.ydata
+        print('onFigureRelease:',self.xRelease, self.yRelease)
         # self.lonReleaseIndex,self.latReleaseIndex = self.findLatLonIndex(self.lonRelease, self.latRelease)
+
+    def rect_select_callback(self, eclick, erelease):
+        self.xPress, self.yPress = eclick.xdata, eclick.ydata
+        self.xRelease, self.yRelease = erelease.xdata, erelease.ydata
+        print('rect_select_callback:',self.lonPress, self.latPress,self.lonRelease, self.latRelease)
+    #     print(" The button you used were: %s %s" % (eclick.button, erelease.button))
 
     def onAnimationBtn(self,event):
         os.system('rm -rf ./Figures/'+self.variableName+'.mp4')
@@ -783,7 +799,16 @@ class CrocoGui(wx.Frame):
         self.endTimeIndex = min( range( len(self.croco.times[:]) ), key=lambda j:abs(self.endTime-self.croco.times[j]))
         self.endTimeTxt.SetValue(str(self.croco.times[self.endTimeIndex]))
 
+
+    # def rect_select_callback(self, eclick, erelease):
+    #     self.lonPress, self.latPress = eclick.xdata, eclick.ydata
+    #     self.lonRelease, self.latRelease = erelease.xdata, erelease.ydata
+
     def onZoomInBtn(self,event):
+        # rs = RectangleSelector(self.figure.gca(), self.rect_select_callback,
+        #                drawtype='box', useblit=False, button=[1], 
+        #                minspanx=5, minspany=5, spancoords='pixels', 
+        #                interactive=True)
         self.xlim = [min(self.lonPress,self.lonRelease),max(self.lonPress,self.lonRelease)]
         self.ylim = [ min(self.latPress,self.latRelease),max(self.latPress,self.latRelease)]
         self.drawxy()

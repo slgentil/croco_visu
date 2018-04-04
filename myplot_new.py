@@ -56,7 +56,7 @@ def plotCurv(fig,x,y=None,xlabel=None,ylabel=None,legend=None, title = None, xlo
 
 
 # -------------------------------------------------------------------------
-def mypcolor(fig,x,y,z, \
+def mypcolor(frame,x,y,z, \
          x2=None,xlabel2=None, \
          xlim=None,ylim=None,clim=None, cformat=None,\
          norm=None,\
@@ -71,7 +71,19 @@ def mypcolor(fig,x,y,z, \
 	# if winsize is None:
 	#     winsize=[8., 6.]
 	# fig.set_size_inches( (winsize[0], winsize[1]) ) 
+	fig = frame.figure
 	ax = fig.add_axes([0.15,0.1,0.85,0.85])
+	# fig.RS = RectangleSelector(ax, frame.rect_select_callback, \
+ #                               drawtype='box', useblit=True, \
+ #                               button=[1], # left button \
+ #                               spancoords='pixels', \
+ #                               interactive=True) 
+	fig.RS = RectangleSelector(ax, frame.rect_select_callback, \
+                               drawtype='box', useblit=True, \
+                               button=[1], # left button \
+                               spancoords='pixels', \
+                               mindist = 0, \
+                               interactive=True) 
 
 	if xlim is None: 
 	    ax.set_xlim((np.min(x),np.max(x)))
@@ -147,3 +159,9 @@ def array2cmap(X):
 
 	cdict = {'red': rd, 'green': gr, 'blue': bl}
 	return colors.LinearSegmentedColormap('my_colormap', cdict, N)
+
+# def rect_select_callback(self, eclick, erelease):
+#     self.lonPress, self.latPress = eclick.xdata, eclick.ydata
+#     self.lonRelease, self.latRelease = erelease.xdata, erelease.ydata
+#     print('rect_select_callback:',self.lonPress, self.latPress,self.lonRelease, self.latRelease)
+# #     print(" The button you used were: %s %s" % (eclick.button, erelease.button))
