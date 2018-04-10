@@ -56,7 +56,7 @@ def plotCurv(fig,x,y=None,xlabel=None,ylabel=None,legend=None, title = None, xlo
 
 
 # -------------------------------------------------------------------------
-def mypcolor(fig,x,y,z, \
+def mypcolor(frame,x,y,z, \
          x2=None,xlabel2=None, \
          xlim=None,ylim=None,clim=None, cformat=None,\
          norm=None,\
@@ -70,8 +70,15 @@ def mypcolor(fig,x,y,z, \
 	# # default size if 8 x 6 inch, 80 DPI (640x480 pixels)
 	# if winsize is None:
 	#     winsize=[8., 6.]
-	# fig.set_size_inches( (winsize[0], winsize[1]) ) 
+	# fig.set_size_inches( (winsize[0], winsize[1]) ) 	
+	fig = frame.figure
 	ax = fig.add_axes([0.15,0.1,0.85,0.85])
+	fig.RS = RectangleSelector(ax, frame.rect_select_callback, \
+                               drawtype='box', useblit=True, \
+                               button=[1], # left button \
+                               spancoords='pixels', \
+                               interactive=True)
+	fig.RS.set_active(False)
 
 	if xlim is None: 
 	    ax.set_xlim((np.min(x),np.max(x)))

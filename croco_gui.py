@@ -106,11 +106,7 @@ class SectionFrame(wx.Frame):
 
     def onFigureClick(self,event):
         self.xPress, self.yPress = event.xdata, event.ydata
-        print('onFigureClick:',self.xPress, self.yPress)
-        # rs = RectangleSelector(self.figure.gca(), self.rect_select_callback,
-        #                drawtype='box', useblit=False, button=[1], 
-        #                minspanx=5, minspany=5, spancoords='pixels', 
-        #                interactive=True)
+        print self.xPress, self.yPress
 
     def onFigureRelease(self,event):
         self.xRelease, self.yRelease = event.xdata, event.ydata
@@ -120,7 +116,10 @@ class SectionFrame(wx.Frame):
     def rect_select_callback(self, eclick, erelease):
         self.xPress, self.yPress = eclick.xdata, eclick.ydata
         self.xRelease, self.yRelease = erelease.xdata, erelease.ydata
-        print('rect_select_callback:',self.lonPress, self.latPress,self.lonRelease, self.latRelease)
+        self.xlim = [min(self.xPress,self.xRelease),max(self.xPress,self.xRelease)]
+        self.ylim = [ min(self.yPress,self.yRelease),max(self.yPress,self.yRelease)]
+        self.drawz(setlim=False)
+        print('rect_select_callback:',self.xPress, self.yPress,self.xRelease, self.yRelease)
     #     print(" The button you used were: %s %s" % (eclick.button, erelease.button))
 
     def onAnimationBtn(self,event):
@@ -142,15 +141,17 @@ class SectionFrame(wx.Frame):
         self.updateVariableZ(setlim=False)
 
     def onstartTimeTxt(self,event):
-        print("startTimeTxt")
+        self.startTime = float(self.startTimeTxt.GetValue())
+        self.startTimeIndex = min( range( len(self.croco.times[:]) ), key=lambda j:abs(self.startTime-self.croco.times[j]))
+        self.startTimeTxt.SetValue(str(self.croco.times[self.startTimeIndex]))
 
     def onendTimeTxt(self,event):
-        print("endTimeTxt")
+        self.endTime = float(self.endTimeTxt.GetValue())
+        self.endTimeIndex = min( range( len(self.croco.times[:]) ), key=lambda j:abs(self.endTime-self.croco.times[j]))
+        self.endTimeTxt.SetValue(str(self.croco.times[self.endTimeIndex]))
 
-    def onZoomInBtn(self,event):
-        self.xlim = [min(self.xPress,self.xRelease),max(self.xPress,self.xRelease)]
-        self.ylim = [min(self.yPress,self.yRelease),max(self.yPress,self.yRelease)]
-        self.drawz(setlim=False)
+    def onZoomInBtn(self,event):       
+        self.figure.RS.set_active(True)
 
     def onZoomOutBtn(self,event):
         self.xlim = [np.min(self.x),np.max(self.x)]
@@ -204,7 +205,7 @@ class SectionFrame(wx.Frame):
             self.xlim = [np.min(self.x),np.max(self.x)]
             self.ylim = [np.min(self.y),np.max(self.y)]
         title = "{:s}, {:s}={:4.1f}, Time={:4.1f}".format(self.variableName,self.section,self.latlon,self.time)
-        mypcolor(self.figure,self.x,self.y,self.variableZ,\
+        mypcolor(self,self.x,self.y,self.variableZ,\
                       title=title,\
                       xlabel=self.xlabel,\
                       ylabel='Depth',\
@@ -511,6 +512,15 @@ class CrocoGui(wx.Frame):
         self.lonRelease, self.latRelease = event.xdata, event.ydata
         self.lonReleaseIndex,self.latReleaseIndex = self.findLatLonIndex(self.lonRelease, self.latRelease)
 
+    def rect_select_callback(self, eclick, erelease):
+        self.xPress, self.yPress = eclick.xdata, eclick.ydata
+        self.xRelease, self.yRelease = erelease.xdata, erelease.ydata
+        self.xlim = [min(self.xPress,self.xRelease),max(self.xPress,self.xRelease)]
+        self.ylim = [ min(self.yPress,self.yRelease),max(self.yPress,self.yRelease)]
+        self.drawxy(setlim=False)
+        print('rect_select_callback:',self.xPress, self.yPress,self.xRelease, self.yRelease)
+    #     print(" The button you used were: %s %s" % (eclick.button, erelease.button))
+
     def findLatLonIndex(self, lonValue, latValue):
         ''' Find nearest value is an array '''
         a = abs(self.croco.crocoGrid._lon - lonValue) + \
@@ -554,11 +564,11 @@ class CrocoGui(wx.Frame):
 
     def onMinColorTxt(self,event):
         self.clim[0] = float(self.MinColorTxt.GetValue())
-        self.drawxy()
+        self.drawxy(setlim=False)
 
     def onMaxColorTxt(self,event):
         self.clim[1] = float(self.MaxColorTxt.GetValue())
-        self.drawxy()
+        self.drawxy(setlim=False)
 
 
     def onTimeMinusBtn(self,event):
@@ -772,12 +782,14 @@ class CrocoGui(wx.Frame):
         self.profileFrame.canvas.Refresh()
         self.profileFrame.Show()
 
+
     def onAnimationBtn(self,event):
         os.system('rm -rf ./Figures/'+self.variableName+'.mp4')
         try:
             os.makedirs('./Figures')
         except:
             pass
+        self.clim = [np.min(self.variableXY),np.max(self.variableXY)]
         save_count = self.endTimeIndex - self.startTimeIndex + 1
         anim = animation.FuncAnimation(self.figure, self.animate, \
                    frames = range(self.startTimeIndex,self.endTimeIndex+1), repeat=False, \
@@ -787,7 +799,7 @@ class CrocoGui(wx.Frame):
 
     def animate( self, i):
         self.timeIndex = i
-        self.updateVariableXY()
+        self.updateVariableXY(setlim=False)
 
     def onstartTimeTxt(self,event):
         self.startTime = float(self.startTimeTxt.GetValue())
@@ -800,18 +812,20 @@ class CrocoGui(wx.Frame):
         self.endTimeTxt.SetValue(str(self.croco.times[self.endTimeIndex]))
 
 
-    # def rect_select_callback(self, eclick, erelease):
-    #     self.lonPress, self.latPress = eclick.xdata, eclick.ydata
-    #     self.lonRelease, self.latRelease = erelease.xdata, erelease.ydata
+    def rect_select_callback(self, eclick, erelease):
+        self.xPress, self.yPress = eclick.xdata, eclick.ydata
+        self.xRelease, self.yRelease = erelease.xdata, erelease.ydata
+        self.xlim = [min(self.xPress,self.xRelease),max(self.xPress,self.xRelease)]
+        self.ylim = [ min(self.yPress,self.yRelease),max(self.yPress,self.yRelease)]
+        self.drawxy(setlim=False)
+        print('rect_select_callback:',self.xPress, self.yPress,self.xRelease, self.yRelease)
+    #     print(" The button you used were: %s %s" % (eclick.button, erelease.button))
 
     def onZoomInBtn(self,event):
-        # rs = RectangleSelector(self.figure.gca(), self.rect_select_callback,
-        #                drawtype='box', useblit=False, button=[1], 
-        #                minspanx=5, minspany=5, spancoords='pixels', 
-        #                interactive=True)
-        self.xlim = [min(self.lonPress,self.lonRelease),max(self.lonPress,self.lonRelease)]
-        self.ylim = [ min(self.latPress,self.latRelease),max(self.latPress,self.latRelease)]
-        self.drawxy()
+        self.figure.RS.set_active(True)
+        # self.xlim = [min(self.lonPress,self.lonRelease),max(self.lonPress,self.lonRelease)]
+        # self.ylim = [ min(self.latPress,self.latRelease),max(self.latPress,self.latRelease)]
+        # self.drawxy()
 
     def onZoomOutBtn(self,event):
         self.xlim = [np.min(self.croco.crocoGrid._lon),np.max(self.croco.crocoGrid._lon)]
@@ -822,7 +836,7 @@ class CrocoGui(wx.Frame):
         filename = self.variableName + ".png"
         self.figure.savefig(filename, dpi=self.figure.dpi)
 
-    def updateVariableXY(self):
+    def updateVariableXY(self,setlim=True):
         time = str(self.timeIndex)
         level = str(self.levelIndex)
         try:
@@ -832,23 +846,32 @@ class CrocoGui(wx.Frame):
                 self.variableXY = self.croco.read_nc(self.variableName, indices= "["+time+",:,:]")
             except Exception:
                 raise Exception
-        self.drawxy()
+        self.drawxy(setlim=setlim)
 
-    def drawxy(self):
+
+    def drawxy(self,setlim=True):
         self.figure.clf()
         # self.canvas.Destroy()
         # self.figure = Figure(figsize=(figsize[0],figsize[1]))
         # self.canvas = FigureCanvas(self.PanelCanvas, -1, self.figure)
         self.canvas.mpl_connect('button_press_event', self.onFigureClick)
         self.canvas.mpl_connect('button_release_event', self.onFigureRelease)
-        # self.figure.clear()
-        # self.figure.clf()
+
+        if setlim:
+            self.clim = [np.min(self.variableXY),np.max(self.variableXY)]
+            self.mincolor = np.min(self.variableXY)
+            self.MinColorTxt.SetValue('%.2E' % self.mincolor)
+            self.maxcolor = np.max(self.variableXY)
+            self.MaxColorTxt.SetValue('%.2E' % self.maxcolor)
+            self.xlim = [np.min(self.croco.crocoGrid._lon),np.max(self.croco.crocoGrid._lon)]
+            self.ylim = [np.min(self.croco.crocoGrid._lat),np.max(self.croco.crocoGrid._lat)]
+
         depth = float(self.LevelTxt.GetValue())
         if depth > 0:
             title = "{:s}, Level={:4d}, Time={:4.1f}".format(self.variableName,self.levelIndex,self.croco.times[self.timeIndex])
         else:
             title = "{:s}, Depth={:4.1f}, Time={:4.1f}".format(self.variableName,depth,self.croco.times[self.timeIndex])
-        mypcolor(self.figure,self.croco.crocoGrid._lon,self.croco.crocoGrid._lat,self.variableXY,\
+        mypcolor(self,self.croco.crocoGrid._lon,self.croco.crocoGrid._lat,self.variableXY,\
                       title=title,\
                       xlabel='Longitude',\
                       ylabel='Latitude',\
