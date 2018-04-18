@@ -19,7 +19,8 @@ from matplotlib.widgets  import RectangleSelector
 
 
 # -------------------------------------------------------------------------
-def plotCurv(fig,x,y=None,xlabel=None,ylabel=None,legend=None, title = None, xlog=False, ylog=False):
+def plotCurv(fig,x,y=None,xlabel=None,ylabel=None, \
+         xlim=None,ylim=None,legend=None, title = None, xlog=False, ylog=False):
 # create a figure
 # fig = plt.Figure()
 
@@ -27,6 +28,11 @@ def plotCurv(fig,x,y=None,xlabel=None,ylabel=None,legend=None, title = None, xlo
 	axes = fig.add_axes([0.07,0.05,0.98,0.90])
 	# axes = self.axes
 
+	if xlim is not None: 
+	    add_axes.set_xlim((xlim[0],xlim[1]))
+	if ylim is not None: 
+	    add_axes.set_ylim((ylim[0],ylim[1]))
+	      
 	if y is None:
 		if legend is None:
 			axes.plot(x, linewidth=2.0)

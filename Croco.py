@@ -31,6 +31,7 @@ class Croco(object):
         self.ListOfVariables = self.list_of_variables()
         self.times = self.read_nc( "time_instant") * second2day
 
+
     def read_nc(self, varname, indices="[:]"):
         '''
         Read data from netcdf file
@@ -567,6 +568,7 @@ class CrocoGrid (Croco):
             raise Exception("Unknown scoord, should be 'new2008' or 'old1994'")
         if self.sc_r is None:
             self.sc_r = sc_r
+        print z.squeeze()[:,128,128]
         return z.squeeze(), np.float32(Cs)
 
 

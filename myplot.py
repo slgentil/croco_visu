@@ -19,13 +19,27 @@ from matplotlib.widgets  import RectangleSelector
 
 
 # -------------------------------------------------------------------------
-def plotCurv(fig,x,y=None,xlabel=None,ylabel=None,legend=None, title = None, xlog=False, ylog=False):
+def plotCurv(frame,x=None,y=None,xlabel=None,ylabel=None,legend=None, title = None, \
+	xlim=None, ylim=None,  xlog=False, ylog=False):
 # create a figure
 # fig = plt.Figure()
 
-# and the axes for the figure
-	axes = fig.add_axes([0.07,0.05,0.98,0.90])
+# and the axes for the figure	
+
+	fig = frame.figure
+	fig.clf()
+	# axes = fig.add_axes([0.07,0.05,0.98,0.90])
+	axes = fig.add_axes([0.08,0.1,0.85,0.85])
+	fig.RS = RectangleSelector(axes, frame.rect_select_callback, \
+                               drawtype='box', useblit=True, \
+                               button=[1], # left button \
+                               spancoords='pixels', \
+                               interactive=True)	
+	fig.RS.set_active(False)
+
 	# axes = self.axes
+	axes.set_xlim((xlim[0],xlim[1]))
+	axes.set_ylim((ylim[0],ylim[1]))
 
 	if y is None:
 		if legend is None:

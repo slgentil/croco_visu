@@ -7,6 +7,8 @@ import sys
 import os
 import wx
 import time
+from datetime import datetime
+import xarray as xr
 import numpy as np
 from numpy.matlib import repmat
 import numpy.ma as ma
@@ -37,14 +39,13 @@ figsize = [6,5]
 
 class SectionFrame(wx.Frame):
 
-    def __init__(self,typSection="XY",croco=None):
+    def __init__(self, croco=None, variableName = None, variable=None, x=None, y=None, \
+        typSection=None , sliceCoord = None, timeIndex=None):
 
         """Constructor"""
 
         wx.Frame.__init__(self, None, wx.ID_ANY, title='Section')
 
-        self.typSection=typSection
-        self.croco = croco
         self.panel = wx.Panel(self, wx.ID_ANY)
 
         self.figure = Figure()
@@ -76,6 +77,36 @@ class SectionFrame(wx.Frame):
 
         self.__do_layout()
 
+        self.croco = croco
+        self.variable = variable
+        self.x = x
+        self.y = y
+        self.variableName = variableName
+        self.typSection = typSection
+        self.sliceCoord = sliceCoord
+        self.timeIndex = timeIndex
+        if croco is not None:
+            self.time = self.croco.wrapper.coords['time']
+        if typSection == "XZ":
+            self.xlabel = "Longitude"
+            self.ylabel = "Depth"
+            self.slice = "Latitude"
+        elif typSection == "YZ":
+            self.xlabel = "Latitude"
+            self.ylabel = "Depth"
+            self.slice = "Longitude"
+        # self.sectionYZ.latlon = self.lon
+        # self.sectionYZ.latlonIndex = self.lonIndex
+        if croco is not None:
+            timeMin = self.croco.wrapper._get_date(0)
+            timeMax = self.croco.wrapper._get_date(self.croco.wrapper.ntimes-1)
+            self.startTimeTxt.SetValue(str(timeMin))
+            self.startTime = timeMin
+            self.startTimeIndex = 0
+            self.endTimeTxt.SetValue(str(timeMax))
+            self.endTime = timeMax
+            self.endTimeIndex = self.croco.wrapper.ntimes -1
+
     def __do_layout(self):
 
         topSizer        = wx.BoxSizer(wx.VERTICAL)
@@ -106,12 +137,9 @@ class SectionFrame(wx.Frame):
 
     def onFigureClick(self,event):
         self.xPress, self.yPress = event.xdata, event.ydata
-        print self.xPress, self.yPress
 
     def onFigureRelease(self,event):
         self.xRelease, self.yRelease = event.xdata, event.ydata
-        print('onFigureRelease:',self.xRelease, self.yRelease)
-        # self.lonReleaseIndex,self.latReleaseIndex = self.findLatLonIndex(self.lonRelease, self.latRelease)
 
     def rect_select_callback(self, eclick, erelease):
         self.xPress, self.yPress = eclick.xdata, eclick.ydata
@@ -119,8 +147,12 @@ class SectionFrame(wx.Frame):
         self.xlim = [min(self.xPress,self.xRelease),max(self.xPress,self.xRelease)]
         self.ylim = [ min(self.yPress,self.yRelease),max(self.yPress,self.yRelease)]
         self.drawz(setlim=False)
-        print('rect_select_callback:',self.xPress, self.yPress,self.xRelease, self.yRelease)
     #     print(" The button you used were: %s %s" % (eclick.button, erelease.button))
+
+
+
+
+
 
     def onAnimationBtn(self,event):
         os.system('rm -rf ./Figures/'+self.variableName+'.mp4')
@@ -128,27 +160,41 @@ class SectionFrame(wx.Frame):
             os.makedirs('./Figures')
         except:
             pass
-        self.clim = [np.min(self.variableZ),np.max(self.variableZ)]
+        self.clim = [np.min(self.variable),np.max(self.variable)]
         save_count = self.endTimeIndex - self.startTimeIndex + 1
         anim = animation.FuncAnimation(self.figure, self.animate, \
                    frames = range(self.startTimeIndex,self.endTimeIndex+1), repeat=False, \
                    blit = False, save_count=save_count)
         self.canvas.draw()
-        anim.save('./Figures/'+self.variableName+'.mp4')
-        
+        time1 = str(self.croco.wrapper._get_date(self.startTimeIndex))
+        time2 = str(self.croco.wrapper._get_date(self.endTimeIndex))
+        filename = "{:s}_{:s}{:4.1f}_{:s}-{:s}.mp4".format(self.variableName,self.slice,self.sliceCoord, \
+            time1,time2).replace(" ", "")
+        anim.save('./Figures/'+filename)
+
     def animate( self, i):
         self.timeIndex = i
         self.updateVariableZ(setlim=False)
 
     def onstartTimeTxt(self,event):
         self.startTime = float(self.startTimeTxt.GetValue())
-        self.startTimeIndex = min( range( len(self.croco.times[:]) ), key=lambda j:abs(self.startTime-self.croco.times[j]))
-        self.startTimeTxt.SetValue(str(self.croco.times[self.startTimeIndex]))
+        times = self.croco.wrapper.coords['time'].values
+        # find nearest index corresponding to instant time to plot
+        self.startTimeIndex = min( range( len(times) ), \
+            key=lambda j:abs(self.startTime-times[j]))
+        self.startTime = self.croco.wrapper._get_date(self.startTimeIndex)
+        self.startTimeTxt.SetValue(str(self.startTime))
 
     def onendTimeTxt(self,event):
         self.endTime = float(self.endTimeTxt.GetValue())
-        self.endTimeIndex = min( range( len(self.croco.times[:]) ), key=lambda j:abs(self.endTime-self.croco.times[j]))
-        self.endTimeTxt.SetValue(str(self.croco.times[self.endTimeIndex]))
+        times = self.croco.wrapper.coords['time'].values
+        # find index corresponding to the nearest instant time to plot
+        self.endTimeIndex = min( range( len(times) ), \
+            key=lambda j:abs(self.endTime-times[j]))
+        self.endTime = self.croco.wrapper._get_date(self.endTimeIndex)
+        self.endTimeTxt.SetValue(str(self.endTime))
+
+
 
     def onZoomInBtn(self,event):       
         self.figure.RS.set_active(True)
@@ -159,11 +205,19 @@ class SectionFrame(wx.Frame):
         self.drawz()
 
     def onPrintBtn(self,event):
-        filename = self.variableName + ".png"
-        self.figure.savefig(filename, dpi=self.figure.dpi)
+        time = str(self.croco.wrapper._get_date(self.timeIndex))
+        filename = "{:s}_{:s}{:4.1f}_Time{:s}.png".format(self.variableName,self.slice,self.sliceCoord, \
+            time).replace(" ", "")
+        # filename = self.variableName + ".png"
+        os.system('rm -rf ./Figures/'+filename)
+        try:
+            os.makedirs('./Figures')
+        except:
+            pass
+        self.figure.savefig('./Figures/'+filename, dpi=self.figure.dpi)
 
     def onResetColorBtn(self,event):
-        self.clim = [np.min(self.variableZ),np.max(self.variableZ)]
+        self.clim = [np.min(self.variable),np.max(self.variable)]
         self.MinColorTxt.SetValue('%.2E' % self.clim[0])
         self.MaxColorTxt.SetValue('%.2E' % self.clim[1])
         self.drawz(setlim=False)
@@ -177,16 +231,12 @@ class SectionFrame(wx.Frame):
         self.drawz(setlim=False)
 
     def updateVariableZ(self,setlim=True):
-        time = str(self.timeIndex)
-        if self.typSection=="YZ":
-            indices="["+time+",:,:,"+str(self.latlonIndex)+"]"
-        else:        
-            indices="["+time+",:,"+str(self.latlonIndex)+",:]"
         try:
-            self.variableZ = self.croco.read_nc(self.variableName, indices= indices)
-        except Exception:
-            raise Exception
+            self.variableZ = self.variable.isel(t=self.timeIndex)
+        except:
+            return
         self.drawz(setlim=setlim)
+
 
     def drawz(self, setlim=True):
         self.figure.clf()
@@ -197,15 +247,17 @@ class SectionFrame(wx.Frame):
         self.canvas.mpl_connect('button_release_event', self.onFigureRelease)
 
         if setlim:
-            self.clim = [np.min(self.variableZ),np.max(self.variableZ)]
-            self.mincolor = np.min(self.variableZ)
+            self.mincolor = np.min(self.variableZ.values)
             self.MinColorTxt.SetValue('%.2E' % self.mincolor)
-            self.maxcolor = np.max(self.variableZ)
+            self.maxcolor = np.max(self.variableZ.values)
             self.MaxColorTxt.SetValue('%.2E' % self.maxcolor)
-            self.xlim = [np.min(self.x),np.max(self.x)]
-            self.ylim = [np.min(self.y),np.max(self.y)]
-        title = "{:s}, {:s}={:4.1f}, Time={:4.1f}".format(self.variableName,self.section,self.latlon,self.time)
-        mypcolor(self,self.x,self.y,self.variableZ,\
+            self.clim = [self.mincolor,self.maxcolor]
+            self.xlim = [np.min(self.x), np.max(self.x)]
+            self.ylim = [np.min(self.y), np.max(self.y)]
+        time = str(self.croco.wrapper._get_date(self.timeIndex))
+        title = "{:s}, {:s}={:4.1f}, Time={:s}".format(self.variableName,self.slice,self.sliceCoord, \
+            time)
+        mypcolor(self,self.x,self.y,self.variableZ.values,\
                       title=title,\
                       xlabel=self.xlabel,\
                       ylabel='Depth',\
@@ -222,7 +274,8 @@ class SectionFrame(wx.Frame):
 
 class ProfileFrame(wx.Frame):
 
-    def __init__(self):
+    def __init__(self, croco=None, profile=None, x=None, y=None, \
+        variableName=None, title=None, xlabel=None, ylabel=None):
 
         """Constructor"""
 
@@ -243,6 +296,13 @@ class ProfileFrame(wx.Frame):
 
 
         self.__do_layout()
+        self.croco = croco
+        self.x = x
+        self.y = y
+        self.variableName = variableName
+        self.title = title
+        self.xlabel=xlabel
+        self.ylabel=ylabel
 
     def __do_layout(self):
 
@@ -264,14 +324,40 @@ class ProfileFrame(wx.Frame):
 
         # self.Layout()
 
-    def onZoomInBtn(self,event):
-        print("ZoomInBtn")
+
+    def rect_select_callback(self, eclick, erelease):
+        self.xPress, self.yPress = eclick.xdata, eclick.ydata
+        self.xRelease, self.yRelease = erelease.xdata, erelease.ydata
+        self.xlim = [min(self.xPress,self.xRelease),max(self.xPress,self.xRelease)]
+        self.ylim = [ min(self.yPress,self.yRelease),max(self.yPress,self.yRelease)]
+        print "rect_select_callback:",self.xlim,self.ylim
+        self.draw(setlim=False)
+
+    def onZoomInBtn(self,event):       
+        self.figure.RS.set_active(True)
 
     def onZoomOutBtn(self,event):
-        print("ZoomOutBtn")
+        self.draw()
 
     def onPrintBtn(self,event):
-        print("Print")
+        filename = self.title.replace(" ", "").replace("=","")+".png"
+        os.system('rm -rf ./Figures/'+filename)
+        try:
+            os.makedirs('./Figures')
+        except:
+            pass
+        self.figure.savefig('./Figures/'+filename, dpi=self.figure.dpi)
+
+    def draw(self, setlim=True):
+        if setlim:
+            self.xlim = [np.min(self.x), np.max(self.x)]
+            self.ylim = [np.min(self.y), np.max(self.y)]
+        title=self.title
+        plotCurv(self,x=self.x,y=self.y,title=title,xlabel=self.xlabel, \
+            ylabel=self.ylabel,xlim=self.xlim, ylim=self.ylim)
+        self.canvas.draw()
+        self.canvas.Refresh()
+        self.Show()
 
 ########################################################################
 
@@ -479,38 +565,40 @@ class CrocoGui(wx.Frame):
             paths = dlg.GetPaths()
         dlg.Destroy()
         self.croco = Croco(paths[0]) 
-        self.OpenFileTxt.SetLabel(paths[0])       
-        self.LabelMinMaxTime.SetLabel("Min/Max Time = "+str(self.croco.times[0])+" ... "+ \
-                                      str(self.croco.times[self.croco.crocoGrid.ntimes-1])) 
-        self.TimeTxt.SetValue(str(self.croco.times[0]))
+        # self.OpenFileTxt.SetLabel(paths[0]) 
+        timeMin = self.croco.wrapper._get_date(0)
+        timeMax = self.croco.wrapper._get_date(self.croco.wrapper.ntimes-1)
+        self.LabelMinMaxTime.SetLabel("Min/Max Time = "+str(timeMin)+" ... "+str(timeMax)+ "days") 
+        self.TimeTxt.SetValue(str(timeMin))
         self.timeIndex = 0
-        self.time = self.croco.times[0]
+        self.time = timeMin
         minLevel = 1
-        maxLevel = int(self.croco.crocoGrid.N)
-        minDepth = - int(self.croco.crocoGrid.h().max())
+        maxLevel = int(self.croco.wrapper.N)
+        minDepth = - int(self.croco.wrapper.metrics['h'].max())
         maxDepth = 0
         self.LabelMinMaxLevel.SetLabel("Min/Max Level = 1 ... "+ str(maxLevel))
         self.LabelMinMaxDepth.SetLabel("Min/Max Depth = "+ str(minDepth)+" ... "+str(maxDepth))
-        self.LevelTxt.SetValue(str(self.croco.crocoGrid.N))
-        self.levelIndex=self.croco.crocoGrid.N - 1
-        self.startTimeTxt.SetValue(str(self.croco.times[0]))
-        self.startTime = self.croco.times[0]
+        self.levelIndex=self.croco.wrapper.N - 1
+        self.LevelTxt.SetValue(str(self.levelIndex+1))
+        self.depth = self.levelIndex + 1
+        self.startTimeTxt.SetValue(str(timeMin))
+        self.startTime = timeMin
         self.startTimeIndex = 0
-        self.endTimeTxt.SetValue(str(self.croco.times[-1]))
-        self.endTime = self.croco.times[-1]
-        self.endTimeIndex = self.croco.crocoGrid.ntimes -1
+        self.endTimeTxt.SetValue(str(timeMax))
+        self.endTime = timeMax
+        self.endTimeIndex = self.croco.wrapper.ntimes -1
         self.CrocoVariableChoice.AppendItems(self.croco.ListOfVariables)
 
 
     def onFigureClick(self,event):
-        self.lonPress, self.latPress = event.xdata, event.ydata
-        self.latPressIndex,self.lonPressIndex = self.findLatLonIndex(self.lonPress, self.latPress)
-        self.LonSectionTxt.SetValue('%.2F' % self.lonPress)
-        self.LatSectionTxt.SetValue('%.2F' % self.latPress)
+        self.lon, self.lat = event.xdata, event.ydata
+        self.latIndex,self.lonIndex = self.findLatLonIndex(self.lon, self.lat)
+        self.LonSectionTxt.SetValue('%.2F' % self.lon)
+        self.LatSectionTxt.SetValue('%.2F' % self.lat)
 
-    def onFigureRelease(self,event):
-        self.lonRelease, self.latRelease = event.xdata, event.ydata
-        self.lonReleaseIndex,self.latReleaseIndex = self.findLatLonIndex(self.lonRelease, self.latRelease)
+    # def onFigureRelease(self,event):
+    #     self.lonRelease, self.latRelease = event.xdata, event.ydata
+    #     self.lonReleaseIndex,self.latReleaseIndex = self.findLatLonIndex(self.lonRelease, self.latRelease)
 
     def rect_select_callback(self, eclick, erelease):
         self.xPress, self.yPress = eclick.xdata, eclick.ydata
@@ -523,30 +611,31 @@ class CrocoGui(wx.Frame):
 
     def findLatLonIndex(self, lonValue, latValue):
         ''' Find nearest value is an array '''
-        a = abs(self.croco.crocoGrid._lon - lonValue) + \
-            abs(self.croco.crocoGrid._lat - latValue)
+        a = abs(self.croco.wrapper.coords['lon_r'].values - lonValue) + \
+            abs(self.croco.wrapper.coords['lat_r'].values - latValue)
         return np.unravel_index(a.argmin(),a.shape)
-        # idx,idy = np.where(np.abs(array-value)==np.abs(array-value).min())
 
     def onCrocoVariableChoice(self, event):
+        '''
+        Choose variable to plot, update text zone for color, launch plot
+        '''
         self.variableName = self.CrocoVariableChoice.GetString(self.CrocoVariableChoice.GetSelection())
-        # var = self.CrocoVariableChoice.GetCurrentSelection()
         time = str(self.timeIndex)
         level = str(self.levelIndex)
         try:
-            self.variableXY = self.croco.read_nc(self.variableName, indices= "["+time+","+level+",:,:]")
-        except Exception:
-            try:
-                self.variableXY = self.croco.read_nc(self.variableName, indices= "["+time+",:,:]")
-            except Exception:
-                raise Exception
-        self.clim = [np.min(self.variableXY),np.max(self.variableXY)]
-        self.mincolor = np.min(self.variableXY)
+            self.variableXY = self.croco.variables[self.variableName].isel(t=self.timeIndex,z_r=self.levelIndex)
+        except:
+            self.variableXY = self.croco.variables[self.variableName].isel(t=self.timeIndex)
+
+        self.mincolor = np.min(self.variableXY.values)
         self.MinColorTxt.SetValue('%.2E' % self.mincolor)
-        self.maxcolor = np.max(self.variableXY)
+        self.maxcolor = np.max(self.variableXY.values)
         self.MaxColorTxt.SetValue('%.2E' % self.maxcolor)
-        self.xlim = [np.min(self.croco.crocoGrid._lon),np.max(self.croco.crocoGrid._lon)]
-        self.ylim = [np.min(self.croco.crocoGrid._lat),np.max(self.croco.crocoGrid._lat)]
+        self.clim = [self.mincolor,self.maxcolor]
+        self.xlim = [np.min(self.croco.wrapper.coords['lon_r'].values), \
+                     np.max(self.croco.wrapper.coords['lon_r'].values)]
+        self.ylim = [np.min(self.croco.wrapper.coords['lat_r'].values), \
+                     np.max(self.croco.wrapper.coords['lat_r'].values)]
         self.drawxy()
 
     def onDerivedVariableChoice(self, event):
@@ -557,7 +646,7 @@ class CrocoGui(wx.Frame):
         # self.draw()
 
     def onResetColorBtn(self,event):
-        self.clim = [np.min(self.variableXY),np.max(self.variableXY)]
+        self.clim = [np.min(self.variableXY.values),np.max(self.variableXY.values)]
         self.MinColorTxt.SetValue('%.2E' % self.clim[0])
         self.MaxColorTxt.SetValue('%.2E' % self.clim[1])
         self.drawxy()
@@ -573,34 +662,40 @@ class CrocoGui(wx.Frame):
 
     def onTimeMinusBtn(self,event):
         self.timeIndex = max(self.timeIndex - 1,0)
-        self.time = self.croco.times[self.timeIndex]
+        self.time = self.croco.wrapper._get_date(self.timeIndex)
         self.TimeTxt.SetValue(str(self.time))
         self.updateVariableXY()
         self.drawxy()
 
     def onTimePlusBtn(self,event):
-        self.timeIndex = min(self.timeIndex + 1,self.croco.crocoGrid.ntimes - 1)
-        self.time = self.croco.times[self.timeIndex]
+        self.timeIndex = min(self.timeIndex + 1,self.croco.wrapper.ntimes - 1)
+        self.time = self.croco.wrapper._get_date(self.timeIndex)
         self.TimeTxt.SetValue(str(self.time))
         self.updateVariableXY()
         self.drawxy()
 
     def onTimeTxt(self,event):
+        # !!! il faut saisir un float, à améliorer
         time = float(self.TimeTxt.GetValue())
-        # find index corresponding to instant time to plot
-        self.timeIndex = min( range( len(self.croco.times[:]) ), key=lambda j:abs(time-self.croco.times[j]))
-        self.TimeTxt.SetValue(str(self.croco.times[self.timeIndex]))
+        times = self.croco.wrapper.coords['time'].values
+        # find index corresponding to the nearest instant time to plot
+        self.timeIndex = min( range( len(times) ), \
+            key=lambda j:abs(time-times[j]))
+        self.time = self.croco.wrapper._get_date(self.timeIndex)
+        self.TimeTxt.SetValue(str(self.time))
         self.updateVariableXY()
         self.drawxy()
 
     def onLevelMinusBtn(self,event):
         self.levelIndex = max(self.levelIndex - 1,0)
+        self.depth = self.levelIndex + 1
         self.LevelTxt.SetValue(str(self.levelIndex + 1))
         self.updateVariableXY()
         self.drawxy()
 
     def onLevelPlusBtn(self,event):
-        self.levelIndex = min(self.levelIndex + 1,self.croco.crocoGrid.N - 1)
+        self.levelIndex = min(self.levelIndex + 1,self.croco.wrapper.N - 1)
+        self.depth = self.levelIndex + 1
         self.LevelTxt.SetValue(str(self.levelIndex + 1))
         self.updateVariableXY()
         self.drawxy()
@@ -610,178 +705,208 @@ class CrocoGui(wx.Frame):
         depth = float(self.LevelTxt.GetValue())
         if depth > 0:
             self.levelIndex = int(self.LevelTxt.GetValue()) - 1
+            self.depth = self.levelIndex + 1
             self.updateVariableXY()
         elif depth < 0:
-            zeta = self.croco.read_nc('ssh', indices= "["+time+",:,:]")
-            z = self.croco.crocoGrid.scoord2z_r(zeta, alpha=0., beta=0.)
-            minlev,maxlev = self.croco.crocoGrid.zslice(None,self.croco.crocoGrid.maskr(),z,depth,findlev=True)
-            indices= "["+time+","+str(minlev)+":"+str(maxlev+1)+",:,:]"
-            var = self.croco.read_nc(self.variableName, indices=indices)
-            dims = self.croco.read_var_dim(self.variableName)
+            self.depth = depth
+            # Calculate depths 
+            ssh = self.croco.variables['ssh'].isel(t=self.timeIndex).values
+            if self.variableName=="u":
+                z = self.croco.wrapper.scoord2z_u(ssh, alpha=0., beta=0)
+            elif self.variableName=="v":
+                z = self.croco.wrapper.scoord2z_v(ssh, alpha=0., beta=0)
+            else :
+                z = self.croco.wrapper.scoord2z_r(ssh, alpha=0., beta=0)
+            minlev,maxlev = self.croco.zslice(None,self.croco.wrapper.masks['mask_r'],z,depth,findlev=True)
+            var = self.croco.variables[self.variableName].isel(t=self.timeIndex, z_r=slice(minlev,maxlev+1))
+            dims = self.croco.variables[self.variableName].dims
+            mask = self.croco.wrapper.masks['mask_r']
             if "x_u" in dims:
-                mask = self.croco.crocoGrid.umask()
-                z = self.croco.crocoGrid.rho2u_3d(z)
+                mask = self.croco.rho2u_2d(mask)
             elif "y_v" in dims:
-                mask = self.croco.crocoGrid.vmask()
-                z = self.croco.crocoGrid.rho2v_3d(z)
-            else:
-                mask = self.croco.crocoGrid.maskr()
-            self.variableXY = self.croco.crocoGrid.zslice(var[:,:,:],mask,z[minlev:maxlev+1,:,:],depth)[0]
+                mask = self.croco.rho2v_2d(mask)
+            zslice = self.croco.zslice(var.values,mask,z[minlev:maxlev+1,:,:],depth)[0]
+            self.variableXY = xr.DataArray(data=zslice)
         else:
             print "baraotrope"
         self.drawxy()
 
     def onLonSectionBtn(self,event):
-        if len(self.croco.read_var_dim(self.variableName)) < 4 :
+        # if variable without z dimension
+        if len(self.croco.variables[self.variableName].dims) < 4 :
             return
-        try:
-            self.sectionYZ.IsShown()
-        except:
-            self.sectionYZ = SectionFrame(typSection="YZ", croco=self.croco)
-        time = str(self.timeIndex)
-        lon = str(self.lonPressIndex)
-        zeta = self.croco.read_nc('ssh', indices= "["+time+",:,:]")
-        self.sectionYZ.y = self.croco.crocoGrid.scoord2z_r(zeta, alpha=0., beta=0)[:,:,self.lonPressIndex]
-        self.sectionYZ.variableName = self.variableName
-        self.sectionYZ.section = "Longitude"
-        self.sectionYZ.xlabel = "Latitude"
-        self.sectionYZ.latlon = self.lonPress
-        self.sectionYZ.latlonIndex = self.lonPressIndex
-        self.sectionYZ.time = self.time
-        self.sectionYZ.variableZ = self.croco.read_nc(self.variableName, indices= "["+time+",:,:,"+lon+"]")
-        self.sectionYZ.x = repmat(self.croco.crocoGrid._lat[:,self.lonPressIndex].squeeze(),self.croco.crocoGrid.N,1)
-        self.sectionYZ.startTimeTxt.SetValue(str(self.croco.times[0]))
-        self.startTime = self.croco.times[0]
-        self.sectionYZ.startTimeIndex = 0
-        self.sectionYZ.endTimeTxt.SetValue(str(self.croco.times[-1]))
-        self.sectionYZ.endTime = self.croco.times[-1]
-        self.sectionYZ.endTimeIndex = self.croco.crocoGrid.ntimes -1
-        self.sectionYZ.drawz()
+        # Get longitude section of current variable
+        # variableZ = self.croco.get_variable(self.variableName, tindex=self.timeIndex, \
+        #     xindex=self.lonIndex)
+        variable = self.croco.get_variable(self.variableName, \
+            xindex=self.lonIndex)
+        # Get Latitude coordinates
+        x = self.croco.get_coord(self.variableName, direction='y')
+        x = repmat(x[:,self.lonIndex].squeeze(),self.croco.wrapper.N,1)
+        # Calculate depths of the slice
+        ssh = self.croco.variables['ssh'].isel(t=self.timeIndex).values
+        if self.variableName=="u":
+            y = self.croco.wrapper.scoord2z_u(ssh, alpha=0., beta=0)[:,:,self.lonIndex]
+        elif self.variableName=="v":
+            y = self.croco.wrapper.scoord2z_v(ssh, alpha=0., beta=0)[:,:,self.lonIndex]
+        else :
+            y = self.croco.wrapper.scoord2z_r(ssh, alpha=0., beta=0)[:,:,self.lonIndex]
+        self.sectionYZ = SectionFrame(\
+            croco=self.croco, \
+            variableName = self.variableName, \
+            variable=variable, 
+            x=x, y=y, \
+            typSection="YZ" , \
+            sliceCoord = self.lon, \
+            timeIndex=self.timeIndex)
+        # Draw the plot
+        self.sectionYZ.updateVariableZ()
 
 
 
     def onLonSectionTxt(self,event):
-        if len(self.croco.read_var_dim(self.variableName)) < 4 :
+        # if variable without z dimension
+        if len(self.croco.variables[self.variableName].dims) < 4 :
             return
-        self.lonPress = float(self.LonSectionTxt.GetValue())
-        self.latPressIndex,self.lonPressIndex = self.findLatLonIndex(self.lonPress, self.latPress) 
-        try:
-            self.sectionYZ.IsShown()
-        except:
-            self.sectionYZ = SectionFrame(typSection="YZ", croco=self.croco)
-        time = str(self.timeIndex)
-        lon = str(self.lonPressIndex)
-        zeta = self.croco.read_nc('ssh', indices= "["+time+",:,:]")
-        self.sectionYZ.variableName = self.variableName
-        self.sectionYZ.section = "Longitude"
-        self.sectionYZ.xlabel = "Latitude"
-        self.sectionYZ.latlon = self.lonPress
-        self.sectionYZ.latlonIndex = self.lonPressIndex
-        self.sectionYZ.time = self.time
-        self.sectionYZ.y = self.croco.crocoGrid.scoord2z_r(zeta, alpha=0., beta=0)[:,:,self.lonPressIndex]
-        self.sectionYZ.variableZ = self.croco.read_nc(self.variableName, indices= "["+time+",:,:,"+lon+"]")
-        self.sectionYZ.x = repmat(self.croco.crocoGrid._lat[:,self.lonPressIndex].squeeze(),self.croco.crocoGrid.N,1)
-        self.sectionYZ.drawz()
+        self.lon = float(self.LonSectionTxt.GetValue())
+        self.latIndex,self.lonIndex = self.findLatLonIndex(self.lon, self.lat) 
+
+        # Get longitude section of current variable
+        # variableZ = self.croco.get_variable(self.variableName, tindex=self.timeIndex, \
+        #     xindex=self.lonIndex)
+        variable = self.croco.get_variable(self.variableName, \
+            xindex=self.lonIndex)
+        # Get Latitude coordinates
+        x = self.croco.get_coord(self.variableName, direction='y')
+        x = repmat(x[:,self.lonIndex].squeeze(),self.croco.wrapper.N,1)
+        # Calculate depths of the slice
+        ssh = self.croco.variables['ssh'].isel(t=self.timeIndex).values
+        if self.variableName=="u":
+            y = self.croco.wrapper.scoord2z_u(ssh, alpha=0., beta=0)[:,:,self.lonIndex]
+        elif self.variableName=="v":
+            y = self.croco.wrapper.scoord2z_v(ssh, alpha=0., beta=0)[:,:,self.lonIndex]
+        else :
+            y = self.croco.wrapper.scoord2z_r(ssh, alpha=0., beta=0)[:,:,self.lonIndex]
+        self.sectionYZ = SectionFrame(\
+            croco=self.croco, \
+            variableName = self.variableName, \
+            variable=variable, 
+            x=x, y=y, \
+            typSection="YZ" , \
+            sliceCoord = self.lon, \
+            timeIndex=self.timeIndex)
+        # Draw the plot
+        self.sectionYZ.updateVariableZ()
 
 
     def onLatSectionBtn(self,event):
-        if len(self.croco.read_var_dim(self.variableName)) < 4 :
+        # if variable without z dimension
+        if len(self.croco.variables[self.variableName].dims) < 4 :
             return
-        try:
-            self.sectionXZ.IsShown()
-        except:
-            self.sectionXZ = SectionFrame(typSection="XZ", croco=self.croco)
-        time = str(self.timeIndex)
-        lat = str(self.latPressIndex)
-        zeta = self.croco.read_nc('ssh', indices= "["+time+",:,:]")
-        self.sectionXZ.variableName = self.variableName
-        self.sectionXZ.section = "Latitude"
-        self.sectionXZ.xlabel = "Longitude"
-        self.sectionXZ.latlon = self.latPress
-        self.sectionXZ.latlonIndex = self.latPressIndex
-        self.sectionXZ.time = self.time
-        self.sectionXZ.y = self.croco.crocoGrid.scoord2z_r(zeta, alpha=0., beta=0)[:,self.latPressIndex,:]
-        self.sectionXZ.variableZ = self.croco.read_nc(self.variableName, indices= "["+time+",:,"+lat+",:]")
-        self.sectionXZ.x = repmat(self.croco.crocoGrid._lon[self.latPressIndex,:].squeeze(),self.croco.crocoGrid.N,1)
-        self.sectionXZ.startTimeTxt.SetValue(str(self.croco.times[0]))
-        self.startTime = self.croco.times[0]
-        self.sectionXZ.startTimeIndex = 0
-        self.sectionXZ.endTimeTxt.SetValue(str(self.croco.times[-1]))
-        self.sectionXZ.endTime = self.croco.times[-1]
-        self.sectionXZ.endTimeIndex = self.croco.crocoGrid.ntimes -1
-        self.sectionXZ.drawz()
-        # self.canvas.draw()
+        # Get latitude section of current variable
+        variable = self.croco.get_variable(self.variableName, \
+            yindex=self.latIndex)
+        # Get Latitude coordinates
+        x = self.croco.get_coord(self.variableName, direction='x')
+        x = repmat(x[self.latIndex,:].squeeze(),self.croco.wrapper.N,1)
+        # Calculate depths of the slice
+        ssh = self.croco.variables['ssh'].isel(t=self.timeIndex).values
+        if self.variableName=="u":
+            y = self.croco.wrapper.scoord2z_u(ssh, alpha=0., beta=0)[:,self.latIndex,:]
+        elif self.variableName=="v":
+            y = self.croco.wrapper.scoord2z_v(ssh, alpha=0., beta=0)[:,self.latIndex,:]
+        else :
+            y = self.croco.wrapper.scoord2z_r(ssh, alpha=0., beta=0)[:,self.latIndex,:]
+        self.sectionXZ = SectionFrame(\
+            croco=self.croco, \
+            variableName = self.variableName, \
+            variable=variable, 
+            x=x, y=y, \
+            typSection="XZ" , \
+            sliceCoord = self.lat, \
+            timeIndex=self.timeIndex)
+        # Draw the plot
+        self.sectionXZ.updateVariableZ()
+
 
     def onLatSectionTxt(self,event):
-        if len(self.croco.read_var_dim(self.variableName)) < 4 :
+        # if variable without z dimension
+        if len(self.croco.variables[self.variableName].dims) < 4 :
             return
-        self.latPress = float(self.LatSectionTxt.GetValue())
-        self.latPressIndex,self.lonPressIndex = self.findLatLonIndex(self.lonPress, self.latPress) 
-        print self.lonPressIndex,self.latPressIndex
-        try:
-            self.sectionXZ.IsShown()
-        except:
-            self.sectionXZ = SectionFrame()
-        time = str(self.timeIndex)
-        lat = str(self.latPressIndex)
-        zeta = self.croco.read_nc('ssh', indices= "["+time+",:,:]")
-        self.sectionXZ.variableName = self.variableName
-        self.sectionXZ.section = "Latitude"
-        self.sectionXZ.xlabel = "Longitude"
-        self.sectionXZ.latlon = self.latPress
-        self.sectionXZ.latlonIndex = self.latPressIndex
-        self.sectionXZ.time = self.time
-        self.sectionXZ.y = self.croco.crocoGrid._scoord2z('r', zeta, alpha=0., beta=0)[0][:,self.latPressIndex,:]
-        self.sectionXZ.variableZ = self.croco.read_nc(self.variableName, indices= "["+time+",:,"+lat+",:]")
-        self.sectionXZ.x = repmat(self.croco.crocoGrid._lon[self.latPressIndex,:].squeeze(),self.croco.crocoGrid.N,1)
-        self.sectionXZ.drawz()
+        self.lat = float(self.LatSectionTxt.GetValue())
+        self.latIndex,self.lonIndex = self.findLatLonIndex(self.lon, self.lat) 
+        # Get latitude section of current variable
+        variable = self.croco.get_variable(self.variableName, \
+            yindex=self.latIndex)
+        # Get Latitude coordinates
+        x = self.croco.get_coord(self.variableName, direction='x')
+        x = repmat(x[self.latIndex,:].squeeze(),self.croco.wrapper.N,1)
+        # Calculate depths of the slice
+        ssh = self.croco.variables['ssh'].isel(t=self.timeIndex).values
+        if self.variableName=="u":
+            y = self.croco.wrapper.scoord2z_u(ssh, alpha=0., beta=0)[:,self.latIndex,:]
+        elif self.variableName=="v":
+            y = self.croco.wrapper.scoord2z_v(ssh, alpha=0., beta=0)[:,self.latIndex,:]
+        else :
+            y = self.croco.wrapper.scoord2z_r(ssh, alpha=0., beta=0)[:,self.latIndex,:]
+        self.sectionXZ = SectionFrame(\
+            croco=self.croco, \
+            variableName = self.variableName, \
+            variable=variable, 
+            x=x, y=y, \
+            typSection="XZ" , \
+            sliceCoord = self.lat, \
+            timeIndex=self.timeIndex)
+        # Draw the plot
+        self.sectionXZ.updateVariableZ()
+
 
 
     def onHovmullerBtn(self,event):
-        print("Lat Section")
+        print("Hovmuller not implemented yet!!!")
 
     def onTimeSeriesBtn(self,event):
-        lat = str(self.latPressIndex)
-        lon = str(self.lonPressIndex)
-        level = str(self.levelIndex)
-        profile = self.croco.read_nc(self.variableName, indices= "[:,"+level+","+lat+","+lon+"]")
-        try:
-            self.profileFrame.IsShown()
-        except Exception:           
-            self.profileFrame = ProfileFrame()
-        title="{:s}, Lon={:4.1f}, Lat={:4.1f}, Depth={:4.1f}".\
-            format(self.variableName,self.lonPress,self.latPress,\
-            self.levelIndex)
-        plotCurv(self.profileFrame.figure,profile,title=title)
-        self.profileFrame.canvas.draw()
-        self.profileFrame.canvas.Refresh()
-        self.profileFrame.Show()
-        # self.profileFrame.axes = self.figure.add_axes([0.1,0.1,0.9,0.9])
-        # self.profileFrame.axes.plot(profile)
-        # self.profileFrame.canvas.draw()
-        # self.profileFrame.Show()
+        x = self.croco.wrapper.coords['time'].values.astype('timedelta64[D]').astype('float')
+        y = self.croco.get_variable(self.variableName, \
+            xindex=self.lonIndex, yindex=self.latIndex, zindex=self.levelIndex).values
+        # try:
+        #     self.profileFrame.IsShown()
+        # except Exc
+        title="{:s}, Lon={:4.1f}, Lat={:4.1f}, Depth={:4.0f}".\
+            format(self.variableName,self.lon,self.lat, self.depth)    
+        self.timeFrame = ProfileFrame(croco=self.croco, \
+            x=x, y=y, \
+            variableName=self.variableName, \
+            title=title, \
+            xlabel="Time (days)")
+        self.timeFrame.draw()
 
     def onVerticalProfileBtn(self,event):
-        if len(self.croco.read_var_dim(self.variableName)) < 4 :
+        if len(self.croco.variables[self.variableName].dims) < 4 :
             return
-        time = str(self.timeIndex)
-        lat = str(self.latPressIndex)
-        lon = str(self.lonPressIndex)
-        title="{:s}, Lon={:4.1f}, Lat={:4.1f}, Time={:4.1f}".\
-            format(self.variableName,self.lonPress,self.latPress,\
-            self.croco.times[self.timeIndex])
-        zeta = self.croco.read_nc('ssh', indices= "["+time+",:,:]")
-        z = self.croco.crocoGrid._scoord2z('r', zeta, alpha=0., beta=0)[0][:,self.latPressIndex,self.lonPressIndex]
-        profile = self.croco.read_nc(self.variableName, indices= "["+time+",:,"+lat+","+lon+"]")
-        try:
-            self.profileFrame.IsShown()
-        except:
-            self.profileFrame = ProfileFrame()
-        plotCurv(self.profileFrame.figure,profile,z,title=title,ylabel="depth")
-        self.profileFrame.canvas.draw()
-        self.profileFrame.canvas.Refresh()
-        self.profileFrame.Show()
+        time = str(self.croco.wrapper._get_date(self.timeIndex))
+        title="{:s}, Lon={:4.1f}, Lat={:4.1f}, Time={:s}".\
+            format(self.variableName,self.lon,self.lat,time)
+        # Calculate depths of the slice
+        ssh = self.croco.variables['ssh'].isel(t=self.timeIndex).values
+        if self.variableName=="u":
+            z = self.croco.wrapper.scoord2z_u(ssh, alpha=0., beta=0)[:,self.latIndex,self.lonIndex]
+        elif self.variableName=="v":
+            z = self.croco.wrapper.scoord2z_v(ssh, alpha=0., beta=0)[:,self.latIndex,self.lonIndex]
+        else :
+            z = self.croco.wrapper.scoord2z_r(ssh, alpha=0., beta=0)[:,self.latIndex,self.lonIndex]
 
+        x = self.croco.get_variable(self.variableName, \
+            xindex=self.lonIndex, yindex=self.latIndex, tindex=self.timeIndex).values
+        # try:
+        #     self.profileFrame.IsShown()
+        # except:
+        self.profileFrame = ProfileFrame(croco=self.croco, \
+            x=x, y=z, \
+            variableName=self.variableName, \
+            title=title,
+            ylabel="Depth (m)")
+        self.profileFrame.draw()
 
     def onAnimationBtn(self,event):
         os.system('rm -rf ./Figures/'+self.variableName+'.mp4')
@@ -795,21 +920,46 @@ class CrocoGui(wx.Frame):
                    frames = range(self.startTimeIndex,self.endTimeIndex+1), repeat=False, \
                    blit = False, save_count=save_count)
         self.canvas.draw()
-        anim.save('./Figures/'+self.variableName+'.mp4')
+        time1 = str(self.croco.wrapper._get_date(self.startTimeIndex))
+        time2 = str(self.croco.wrapper._get_date(self.endTimeIndex))
+        filename = "{:s}_Depth={:4.0f}_{:s}-{:s}.mp4".format(self.variableName,self.depth,time1,time2)
+        filename=filename.replace(" ","")
+        anim.save('./Figures/'+filename)
 
     def animate( self, i):
         self.timeIndex = i
         self.updateVariableXY(setlim=False)
 
     def onstartTimeTxt(self,event):
+        # !!! il faut saisir un float, à améliorer
+        # self.startTime = np.timedelta64(self.startTimeTxt.GetValue(),'D')
         self.startTime = float(self.startTimeTxt.GetValue())
-        self.startTimeIndex = min( range( len(self.croco.times[:]) ), key=lambda j:abs(self.startTime-self.croco.times[j]))
-        self.startTimeTxt.SetValue(str(self.croco.times[self.startTimeIndex]))
+        times = self.croco.wrapper.coords['time'].values
+        # find index corresponding to instant time to plot
+        # self.timeIndex = min( range( len(self.croco.wrapper.coords['time'].values) ), \
+        #     key=lambda j:abs(time-self.croco.wrapper.coords['time'].values[j]))
+        self.startTimeIndex = min( range( len(times) ), \
+            key=lambda j:abs(self.startTime-times[j]))
+        # self.startTime = float(self.startTimeTxt.GetValue())
+        # find index corresponding to instant time to plot
+        # self.startTimeIndex = min( range( len(self.croco.wrapper.coords['time'].values) ), \
+        #            key=lambda j:abs(self.startTime-self.croco.wrapper.coords['time'].values[j]))
+        self.startTime = self.croco.wrapper._get_date(self.startTimeIndex)
+        self.startTimeTxt.SetValue(str(self.startTime))
 
     def onendTimeTxt(self,event):
+        # !!! il faut saisir un float, à améliorer
+        # self.endTime = np.timedelta64(self.endTimeTxt.GetValue(),'D')
         self.endTime = float(self.endTimeTxt.GetValue())
-        self.endTimeIndex = min( range( len(self.croco.times[:]) ), key=lambda j:abs(self.endTime-self.croco.times[j]))
-        self.endTimeTxt.SetValue(str(self.croco.times[self.endTimeIndex]))
+        times = self.croco.wrapper.coords['time'].values
+        # self.startTime = float(self.startTimeTxt.GetValue())
+        # find index corresponding to instant time to plot
+        self.endTimeIndex = min( range( len(times) ), \
+            key=lambda j:abs(self.endTime-times[j]))
+        # self.endTimeIndex = min( range( len(self.croco.wrapper.coords['time'].values) ), \
+        #            key=lambda j:abs(self.endTime-self.croco.wrapper.coords['time'].values[j]))
+        self.endTime = self.croco.wrapper._get_date(self.endTimeIndex)
+        self.endTimeTxt.SetValue(str(self.endTime))
 
 
     def rect_select_callback(self, eclick, erelease):
@@ -818,34 +968,34 @@ class CrocoGui(wx.Frame):
         self.xlim = [min(self.xPress,self.xRelease),max(self.xPress,self.xRelease)]
         self.ylim = [ min(self.yPress,self.yRelease),max(self.yPress,self.yRelease)]
         self.drawxy(setlim=False)
-        print('rect_select_callback:',self.xPress, self.yPress,self.xRelease, self.yRelease)
     #     print(" The button you used were: %s %s" % (eclick.button, erelease.button))
 
     def onZoomInBtn(self,event):
         self.figure.RS.set_active(True)
-        # self.xlim = [min(self.lonPress,self.lonRelease),max(self.lonPress,self.lonRelease)]
-        # self.ylim = [ min(self.latPress,self.latRelease),max(self.latPress,self.latRelease)]
-        # self.drawxy()
 
     def onZoomOutBtn(self,event):
-        self.xlim = [np.min(self.croco.crocoGrid._lon),np.max(self.croco.crocoGrid._lon)]
-        self.ylim = [np.min(self.croco.crocoGrid._lat),np.max(self.croco.crocoGrid._lat)]
+        self.xlim = [np.min(self.croco.wrapper.coords['lon_r'].values), \
+                     np.max(self.croco.wrapper.coords['lon_r'].values)]
+        self.ylim = [np.min(self.croco.wrapper.coords['lat_r'].values), \
+                     np.max(self.croco.wrapper.coords['lat_r'].values)]
         self.drawxy()
 
     def onPrintBtn(self,event):
-        filename = self.variableName + ".png"
-        self.figure.savefig(filename, dpi=self.figure.dpi)
+        time = str(self.croco.wrapper._get_date(self.timeIndex))
+        filename = "{:s}_Depth={:4.0f}_Time{:s}".format(self.variableName,self.depth,time)
+        filename=filename.replace(" ","")+".png"
+        os.system('rm -rf ./Figures/'+filename)
+        try:
+            os.makedirs('./Figures')
+        except:
+            pass
+        self.figure.savefig('./Figures/'+filename, dpi=self.figure.dpi)
 
     def updateVariableXY(self,setlim=True):
-        time = str(self.timeIndex)
-        level = str(self.levelIndex)
         try:
-            self.variableXY = self.croco.read_nc(self.variableName, indices= "["+time+","+level+",:,:]")
-        except Exception:
-            try:
-                self.variableXY = self.croco.read_nc(self.variableName, indices= "["+time+",:,:]")
-            except Exception:
-                raise Exception
+            self.variableXY = self.croco.variables[self.variableName].isel(t=self.timeIndex,z_r=self.levelIndex)
+        except:
+            self.variableXY = self.croco.variables[self.variableName].isel(t=self.timeIndex)
         self.drawxy(setlim=setlim)
 
 
@@ -855,23 +1005,31 @@ class CrocoGui(wx.Frame):
         # self.figure = Figure(figsize=(figsize[0],figsize[1]))
         # self.canvas = FigureCanvas(self.PanelCanvas, -1, self.figure)
         self.canvas.mpl_connect('button_press_event', self.onFigureClick)
-        self.canvas.mpl_connect('button_release_event', self.onFigureRelease)
+        # self.canvas.mpl_connect('button_release_event', self.onFigureRelease)
 
         if setlim:
-            self.clim = [np.min(self.variableXY),np.max(self.variableXY)]
-            self.mincolor = np.min(self.variableXY)
+            self.mincolor = np.min(self.variableXY.values)
             self.MinColorTxt.SetValue('%.2E' % self.mincolor)
-            self.maxcolor = np.max(self.variableXY)
+            self.maxcolor = np.max(self.variableXY.values)
             self.MaxColorTxt.SetValue('%.2E' % self.maxcolor)
-            self.xlim = [np.min(self.croco.crocoGrid._lon),np.max(self.croco.crocoGrid._lon)]
-            self.ylim = [np.min(self.croco.crocoGrid._lat),np.max(self.croco.crocoGrid._lat)]
+            self.clim = [self.mincolor,self.maxcolor]
+            self.xlim = [np.min(self.croco.wrapper.coords['lon_r'].values), \
+                         np.max(self.croco.wrapper.coords['lon_r'].values)]
+            self.ylim = [np.min(self.croco.wrapper.coords['lat_r'].values), \
+                         np.max(self.croco.wrapper.coords['lat_r'].values)]
 
+
+        time = str(self.croco.wrapper._get_date(self.timeIndex))
         depth = float(self.LevelTxt.GetValue())
+        lon = self.croco.wrapper.coords['lon_r'].values
+        lat = self.croco.wrapper.coords['lat_r'].values
+
         if depth > 0:
-            title = "{:s}, Level={:4d}, Time={:4.1f}".format(self.variableName,self.levelIndex,self.croco.times[self.timeIndex])
+            title = "{:s}, Level={:4d}, Time={:s}".format(self.variableName,self.levelIndex+1,time)
         else:
-            title = "{:s}, Depth={:4.1f}, Time={:4.1f}".format(self.variableName,depth,self.croco.times[self.timeIndex])
-        mypcolor(self,self.croco.crocoGrid._lon,self.croco.crocoGrid._lat,self.variableXY,\
+            # title = "{:s}, Depth={:4.1f}, Time={:4.1f}".format(self.variableName,depth,time)
+            title = "{:s}, Depth={:4.1f}, Time={:s}".format(self.variableName,depth,time)
+        mypcolor(self,lon,lat,self.variableXY.values,\
                       title=title,\
                       xlabel='Longitude',\
                       ylabel='Latitude',\
