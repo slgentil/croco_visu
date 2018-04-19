@@ -38,45 +38,64 @@ figsize = [6,5]
 ########################################################################
 
 class SectionFrame(wx.Frame):
+    """ 
+    Window class to plot longitude and latitude sections.
+    The window contains a canvas to plot, several buttons (animation, zoom in, zoom out, 
+    print and reset color) and text control (start time and end time for animation, 
+    min and max color for the colorbar)
+
+    Attributes:
+    croco : croco instance to study
+    variableName : Name of the variable to plot in the canvas
+    variable : 3D dataarray (x,y,t) of the variable to plot
+    x : numpy array of x coordinates
+    y : numpy array of y coordinates
+    typSection: type of slice XZ or YZ
+    sliceCoord: coordinate of the slice (latitude for XZ, latitude for YZ)
+    timeIndex: current time index to plot
+    """
 
     def __init__(self, croco=None, variableName = None, variable=None, x=None, y=None, \
         typSection=None , sliceCoord = None, timeIndex=None):
+        """ return a SectioFrame instance """
 
-        """Constructor"""
-
+        # Create the window
         wx.Frame.__init__(self, None, wx.ID_ANY, title='Section')
 
+        # Now create the Panel to put the other controls on.
         self.panel = wx.Panel(self, wx.ID_ANY)
 
+        # and a few controls
         self.figure = Figure()
         self.axes = self.figure.add_axes([0,0,1,1])
         self.canvas = FigureCanvas(self.panel, -1, self.figure)
-        self.canvas.mpl_connect('button_press_event', self.onFigureClick)
-        self.canvas.mpl_connect('button_release_event', self.onFigureRelease)
-        # self.canvas.mpl_connect('motion_notify_event', self.onFigureMotion)
 
         self.AnimationBtn = wx.Button(self.panel, wx.ID_ANY, "Animation")
-        self.AnimationBtn.Bind(wx.EVT_BUTTON, self.onAnimationBtn)
         self.startTimeTxt = wx.TextCtrl(self.panel, wx.ID_ANY, "1", style=wx.TE_CENTRE|wx.TE_PROCESS_ENTER)
-        self.startTimeTxt.Bind(wx.EVT_TEXT_ENTER, self.onstartTimeTxt)
         self.endTimeTxt = wx.TextCtrl(self.panel, wx.ID_ANY, "1", style=wx.TE_CENTRE|wx.TE_PROCESS_ENTER)
-        self.endTimeTxt.Bind(wx.EVT_TEXT_ENTER, self.onendTimeTxt)
         self.ZoomInBtn = wx.Button(self.panel, wx.ID_ANY, "Zoom In")
-        self.ZoomInBtn.Bind(wx.EVT_BUTTON, self.onZoomInBtn)
         self.ZoomOutBtn = wx.Button(self.panel, wx.ID_ANY, "Zoom Out")
-        self.ZoomOutBtn.Bind(wx.EVT_BUTTON, self.onZoomOutBtn)
         self.PrintBtn = wx.Button(self.panel, wx.ID_ANY, "Print")
-        self.PrintBtn.Bind(wx.EVT_BUTTON, self.onPrintBtn)
         
         self.ResetColorBtn = wx.Button(self.panel, wx.ID_ANY, "Reset Color")
-        self.ResetColorBtn.Bind(wx.EVT_BUTTON, self.onResetColorBtn)
         self.MinColorTxt = wx.TextCtrl(self.panel, wx.ID_ANY, "Min Color", style=wx.TE_CENTRE|wx.TE_PROCESS_ENTER)
-        self.MinColorTxt.Bind(wx.EVT_TEXT_ENTER, self.onMinColorTxt)
         self.MaxColorTxt = wx.TextCtrl(self.panel, wx.ID_ANY, "Max Color", style=wx.TE_CENTRE|wx.TE_PROCESS_ENTER)
+
+        # bind the menu event to an event handler
+        self.canvas.mpl_connect('button_press_event', self.onFigureClick)
+        self.AnimationBtn.Bind(wx.EVT_BUTTON, self.onAnimationBtn)
+        self.startTimeTxt.Bind(wx.EVT_TEXT_ENTER, self.onstartTimeTxt)
+        self.endTimeTxt.Bind(wx.EVT_TEXT_ENTER, self.onendTimeTxt)
+        self.ZoomInBtn.Bind(wx.EVT_BUTTON, self.onZoomInBtn)
+        self.ZoomOutBtn.Bind(wx.EVT_BUTTON, self.onZoomOutBtn)
+        self.PrintBtn.Bind(wx.EVT_BUTTON, self.onPrintBtn)
+        self.ResetColorBtn.Bind(wx.EVT_BUTTON, self.onResetColorBtn)
+        self.MinColorTxt.Bind(wx.EVT_TEXT_ENTER, self.onMinColorTxt)
         self.MaxColorTxt.Bind(wx.EVT_TEXT_ENTER, self.onMaxColorTxt)
 
         self.__do_layout()
 
+        # Initialize the variables of the class
         self.croco = croco
         self.variable = variable
         self.x = x
@@ -95,8 +114,6 @@ class SectionFrame(wx.Frame):
             self.xlabel = "Latitude"
             self.ylabel = "Depth"
             self.slice = "Longitude"
-        # self.sectionYZ.latlon = self.lon
-        # self.sectionYZ.latlonIndex = self.lonIndex
         if croco is not None:
             timeMin = self.croco.wrapper._get_date(0)
             timeMax = self.croco.wrapper._get_date(self.croco.wrapper.ntimes-1)
@@ -108,12 +125,13 @@ class SectionFrame(wx.Frame):
             self.endTimeIndex = self.croco.wrapper.ntimes -1
 
     def __do_layout(self):
-
+        """
+        Use a sizer to layout the controls, stacked vertically or horizontally
+        """
         topSizer        = wx.BoxSizer(wx.VERTICAL)
         canvasSizer     = wx.BoxSizer(wx.VERTICAL)
         buttonsSizer    = wx.BoxSizer(wx.HORIZONTAL)
         colorSizer      = wx.BoxSizer(wx.HORIZONTAL)
-
 
         canvasSizer.Add(self.canvas, 0, wx.ALL, 5)
         buttonsSizer.Add(self.AnimationBtn,0, wx.ALL, 5)
@@ -135,26 +153,26 @@ class SectionFrame(wx.Frame):
 
         self.Layout()
 
+
+    # ------------ Event handler
+
+    # Event handler on plot canvas
     def onFigureClick(self,event):
+        """Event handler for the button click on plot"""
         self.xPress, self.yPress = event.xdata, event.ydata
 
-    def onFigureRelease(self,event):
-        self.xRelease, self.yRelease = event.xdata, event.ydata
-
     def rect_select_callback(self, eclick, erelease):
+        """Event handler for rectangle selector on plot"""
         self.xPress, self.yPress = eclick.xdata, eclick.ydata
         self.xRelease, self.yRelease = erelease.xdata, erelease.ydata
         self.xlim = [min(self.xPress,self.xRelease),max(self.xPress,self.xRelease)]
         self.ylim = [ min(self.yPress,self.yRelease),max(self.yPress,self.yRelease)]
         self.drawz(setlim=False)
-    #     print(" The button you used were: %s %s" % (eclick.button, erelease.button))
 
 
-
-
-
-
+    # Event handler for animation
     def onAnimationBtn(self,event):
+        """Event handler for the button click Animation button"""
         os.system('rm -rf ./Figures/'+self.variableName+'.mp4')
         try:
             os.makedirs('./Figures')
@@ -173,10 +191,12 @@ class SectionFrame(wx.Frame):
         anim.save('./Figures/'+filename)
 
     def animate( self, i):
+        """ Function to plot animation in canvas """
         self.timeIndex = i
         self.updateVariableZ(setlim=False)
 
     def onstartTimeTxt(self,event):
+        """Event handler for Enter key in start time text """
         self.startTime = float(self.startTimeTxt.GetValue())
         times = self.croco.wrapper.coords['time'].values
         # find nearest index corresponding to instant time to plot
@@ -186,6 +206,7 @@ class SectionFrame(wx.Frame):
         self.startTimeTxt.SetValue(str(self.startTime))
 
     def onendTimeTxt(self,event):
+        """Event handler for Enter key in end time text """
         self.endTime = float(self.endTimeTxt.GetValue())
         times = self.croco.wrapper.coords['time'].values
         # find index corresponding to the nearest instant time to plot
@@ -195,16 +216,20 @@ class SectionFrame(wx.Frame):
         self.endTimeTxt.SetValue(str(self.endTime))
 
 
-
-    def onZoomInBtn(self,event):       
+    # Event handler for zoom
+    def onZoomInBtn(self,event):    
+        """Event handler for the button click Zoom in button"""   
         self.figure.RS.set_active(True)
 
     def onZoomOutBtn(self,event):
+        """Event handler for the button click Zoom out button""" 
         self.xlim = [np.min(self.x),np.max(self.x)]
         self.ylim = [np.min(self.y),np.max(self.y)]
         self.drawz()
 
+    # Event handler for Print
     def onPrintBtn(self,event):
+        """Event handler for the button click Print button""" 
         time = str(self.croco.wrapper._get_date(self.timeIndex))
         filename = "{:s}_{:s}{:4.1f}_Time{:s}.png".format(self.variableName,self.slice,self.sliceCoord, \
             time).replace(" ", "")
@@ -216,21 +241,28 @@ class SectionFrame(wx.Frame):
             pass
         self.figure.savefig('./Figures/'+filename, dpi=self.figure.dpi)
 
+    # Event handler for Color setup
     def onResetColorBtn(self,event):
+        """Event handler for the button click Reset Color button""" 
         self.clim = [np.min(self.variable),np.max(self.variable)]
         self.MinColorTxt.SetValue('%.2E' % self.clim[0])
         self.MaxColorTxt.SetValue('%.2E' % self.clim[1])
         self.drawz(setlim=False)
 
     def onMinColorTxt(self,event):
+        """Event handler for Enter key in Min Color text """
         self.clim[0] = float(self.MinColorTxt.GetValue())
         self.drawz(setlim=False)
 
     def onMaxColorTxt(self,event):
+        """Event handler for Enter key in Max Color text """
         self.clim[1] = float(self.MaxColorTxt.GetValue())
         self.drawz(setlim=False)
 
+    #------------- Methods of class
+
     def updateVariableZ(self,setlim=True):
+        """ reload current variable depending on the time and plot it """
         try:
             self.variableZ = self.variable.isel(t=self.timeIndex)
         except:
@@ -239,12 +271,9 @@ class SectionFrame(wx.Frame):
 
 
     def drawz(self, setlim=True):
+        """ plot the current variable in the canvas """
         self.figure.clf()
-        # self.canvas.Destroy()
-        # self.figure = Figure(figsize=(figsize[0],figsize[1]))
-        # self.canvas = FigureCanvas(self.panel, -1, self.figure)
         self.canvas.mpl_connect('button_press_event', self.onFigureClick)
-        self.canvas.mpl_connect('button_release_event', self.onFigureRelease)
 
         if setlim:
             self.mincolor = np.min(self.variableZ.values)
@@ -269,33 +298,51 @@ class SectionFrame(wx.Frame):
         self.canvas.Refresh()
         self.Show()
 
-
+# end of SectionFrame Class
 ########################################################################
 
 class ProfileFrame(wx.Frame):
+    """ 
+    Window class to plot time series or depth profile.
+    The window contains a canvas to plot, several buttons (zoom in, zoom out and 
+    print ) 
 
-    def __init__(self, croco=None, profile=None, x=None, y=None, \
+    Attributes:
+    croco : croco instance to study
+    x : numpy array of x coordinates
+    y : numpy array of y coordinates
+    variableName : Name of the variable to plot in the canvas
+    title : title of the plot
+    xlabel : label of x axis
+    ylabel : label of y axis
+    """
+
+    def __init__(self, croco=None, x=None, y=None, \
         variableName=None, title=None, xlabel=None, ylabel=None):
 
-        """Constructor"""
-
+        # Create the window
         wx.Frame.__init__(self, None, wx.ID_ANY, title='Profile')
 
+        # Now create the Panel to put the other controls on.
         self.panel = wx.Panel(self, wx.ID_ANY)
 
+        # and a few controls
         self.figure = Figure()
-        # self.axes = self.figure.add_axes([0.1,0.1,0.9,0.9])
         self.canvas = FigureCanvas(self.panel, -1, self.figure)
 
         self.ZoomInBtn = wx.Button(self.panel, wx.ID_ANY, "Zoom In")
-        self.ZoomInBtn.Bind(wx.EVT_BUTTON, self.onZoomInBtn)
         self.ZoomOutBtn = wx.Button(self.panel, wx.ID_ANY, "Zoom Out")
-        self.ZoomOutBtn.Bind(wx.EVT_BUTTON, self.onZoomOutBtn)
         self.PrintBtn = wx.Button(self.panel, wx.ID_ANY, "Print")
+
+
+        # bind the menu event to an event handler
+        self.ZoomInBtn.Bind(wx.EVT_BUTTON, self.onZoomInBtn)
+        self.ZoomOutBtn.Bind(wx.EVT_BUTTON, self.onZoomOutBtn)
         self.PrintBtn.Bind(wx.EVT_BUTTON, self.onPrintBtn)
 
-
         self.__do_layout()
+
+        # Initialize the variables of the class
         self.croco = croco
         self.x = x
         self.y = y
@@ -306,6 +353,9 @@ class ProfileFrame(wx.Frame):
 
     def __do_layout(self):
 
+        """
+        Use a sizer to layout the controls, stacked vertically or horizontally
+        """
         topSizer        = wx.BoxSizer(wx.VERTICAL)
         canvasSizer     = wx.BoxSizer(wx.VERTICAL)
         buttonsSizer    = wx.BoxSizer(wx.HORIZONTAL)
@@ -322,24 +372,28 @@ class ProfileFrame(wx.Frame):
         self.panel.SetSizer(topSizer)
         topSizer.Fit(self)
 
-        # self.Layout()
+        self.Layout()
 
+    # ------------ Event handler
 
     def rect_select_callback(self, eclick, erelease):
+        """Event handler for rectangle selector on plot"""
         self.xPress, self.yPress = eclick.xdata, eclick.ydata
         self.xRelease, self.yRelease = erelease.xdata, erelease.ydata
         self.xlim = [min(self.xPress,self.xRelease),max(self.xPress,self.xRelease)]
         self.ylim = [ min(self.yPress,self.yRelease),max(self.yPress,self.yRelease)]
-        print "rect_select_callback:",self.xlim,self.ylim
         self.draw(setlim=False)
 
-    def onZoomInBtn(self,event):       
+    def onZoomInBtn(self,event): 
+        """Event handler for the button click Zoom in button"""         
         self.figure.RS.set_active(True)
 
     def onZoomOutBtn(self,event):
+        """Event handler for the button click Zoom out button"""   
         self.draw()
 
     def onPrintBtn(self,event):
+        """Event handler for the button click Print button""" 
         filename = self.title.replace(" ", "").replace("=","")+".png"
         os.system('rm -rf ./Figures/'+filename)
         try:
@@ -348,7 +402,10 @@ class ProfileFrame(wx.Frame):
             pass
         self.figure.savefig('./Figures/'+filename, dpi=self.figure.dpi)
 
+    #------------- Methods of class
+
     def draw(self, setlim=True):
+        """ plot the current variable in the canvas """
         if setlim:
             self.xlim = [np.min(self.x), np.max(self.x)]
             self.ylim = [np.min(self.y), np.max(self.y)]
@@ -359,101 +416,112 @@ class ProfileFrame(wx.Frame):
         self.canvas.Refresh()
         self.Show()
 
+# end of ProfileFrame Class
 ########################################################################
 
 class CrocoGui(wx.Frame):
+    """ 
+    Window class to plot the XY sections, manage variables, times, levels and create 
+    other windows for vertical sections and profiles
+
+    Attributes:
+    title : name of the window
+    """
 
     def __init__(self):
 
-        wx.Frame.__init__(self, None, wx.ID_ANY, title='My Form')
+        # Create the window
+        wx.Frame.__init__(self, None, wx.ID_ANY, title='Main Window')
 
+        # Now create the Panel to put the other controls on.
         self.Panel = wx.Panel(self, wx.ID_ANY)
 
+        # and a few controls
         self.OpenFileBtn = wx.Button(self.Panel, wx.ID_ANY, "Open History File ...")
-        self.OpenFileBtn.Bind(wx.EVT_BUTTON, self.onOpenFile)
         self.OpenFileTxt = wx.StaticText(self.Panel, wx.ID_ANY, " ", style=wx.ALIGN_LEFT)
 
         self.CrocoVariableChoice = wx.Choice(self.Panel, wx.ID_ANY, choices=["Croco Variables ..."])
         self.CrocoVariableChoice.SetSelection(0)
-        self.CrocoVariableChoice.Bind(wx.EVT_CHOICE, self.onCrocoVariableChoice)
 
         self.DerivedVariableChoice = wx.Choice(self.Panel, wx.ID_ANY, choices=["Derived Variables ..."])
         self.DerivedVariableChoice.SetSelection(0)
-        self.DerivedVariableChoice.Bind(wx.EVT_CHOICE, self.onDerivedVariableChoice)
 
         self.ResetColorBtn = wx.Button(self.Panel, wx.ID_ANY, "Reset Color")
-        self.ResetColorBtn.Bind(wx.EVT_BUTTON, self.onResetColorBtn)
         self.MinColorTxt = wx.TextCtrl(self.Panel, wx.ID_ANY, "Min Color", style=wx.TE_CENTRE|wx.TE_PROCESS_ENTER)
-        self.MinColorTxt.Bind(wx.EVT_TEXT_ENTER, self.onMinColorTxt)
         self.MaxColorTxt = wx.TextCtrl(self.Panel, wx.ID_ANY, "Max Color", style=wx.TE_CENTRE|wx.TE_PROCESS_ENTER)
-        self.MaxColorTxt.Bind(wx.EVT_TEXT_ENTER, self.onMaxColorTxt)
 
         self.LabelTime = wx.StaticText(self.Panel,-1,label="Choose Time",style = wx.ALIGN_CENTER)
         self.LabelMinMaxTime = wx.StaticText(self.Panel, wx.ID_ANY, " ", style=wx.ALIGN_LEFT)
         self.TimeMinusBtn = wx.Button(self.Panel, wx.ID_ANY, "<")
-        self.TimeMinusBtn.Bind(wx.EVT_BUTTON, self.onTimeMinusBtn)
         self.TimeTxt = wx.TextCtrl(self.Panel, wx.ID_ANY, "Time", style=wx.TE_CENTRE|wx.TE_PROCESS_ENTER)
-        self.TimeTxt.Bind(wx.EVT_TEXT_ENTER, self.onTimeTxt)
         self.TimePlusBtn = wx.Button(self.Panel, wx.ID_ANY, ">")
-        self.TimePlusBtn.Bind(wx.EVT_BUTTON, self.onTimePlusBtn)
 
         self.LabelLevel = wx.StaticText(self.Panel,-1,label="Choose level (level>0, depth<0)",style = wx.ALIGN_CENTER)
         self.LabelMinMaxLevel = wx.StaticText(self.Panel, wx.ID_ANY, " ", style=wx.ALIGN_LEFT)
         self.LabelMinMaxDepth = wx.StaticText(self.Panel, wx.ID_ANY, " ", style=wx.ALIGN_LEFT)
         self.LevelMinusBtn = wx.Button(self.Panel, wx.ID_ANY, "<")
-        self.LevelMinusBtn.Bind(wx.EVT_BUTTON, self.onLevelMinusBtn)
         self.LevelTxt = wx.TextCtrl(self.Panel, wx.ID_ANY, "Level", style=wx.TE_CENTRE|wx.TE_PROCESS_ENTER)
-        self.LevelTxt.Bind(wx.EVT_TEXT_ENTER, self.onLevelTxt)
         self.LevelPlusBtn = wx.Button(self.Panel, wx.ID_ANY, ">")
-        self.LevelPlusBtn.Bind(wx.EVT_BUTTON, self.onLevelPlusBtn)
 
         self.LonSectionBtn = wx.Button(self.Panel, wx.ID_ANY, "Longitude Section")
-        self.LonSectionBtn.Bind(wx.EVT_BUTTON, self.onLonSectionBtn)
         self.LonSectionTxt = wx.TextCtrl(self.Panel, wx.ID_ANY, "Longitude", style=wx.TE_CENTRE|wx.TE_PROCESS_ENTER)
-        self.LonSectionTxt.Bind(wx.EVT_TEXT_ENTER, self.onLonSectionTxt)
         self.LatSectionBtn = wx.Button(self.Panel, wx.ID_ANY, "Latitude Section")
-        self.LatSectionBtn.Bind(wx.EVT_BUTTON, self.onLatSectionBtn)
         self.LatSectionTxt = wx.TextCtrl(self.Panel, wx.ID_ANY, "Latitude", style=wx.TE_CENTRE|wx.TE_PROCESS_ENTER)
-        self.LatSectionTxt.Bind(wx.EVT_TEXT_ENTER, self.onLatSectionTxt)
         self.HovmullerBtn = wx.Button(self.Panel, wx.ID_ANY, "Hovmuller")
-        self.HovmullerBtn.Bind(wx.EVT_BUTTON, self.onHovmullerBtn)
         self.TimeSeriesBtn = wx.Button(self.Panel, wx.ID_ANY, "Time Series")
-        self.TimeSeriesBtn.Bind(wx.EVT_BUTTON, self.onTimeSeriesBtn)
         self.VerticalProfileBtn = wx.Button(self.Panel, wx.ID_ANY, "Vertical Profile")
-        self.VerticalProfileBtn.Bind(wx.EVT_BUTTON, self.onVerticalProfileBtn)
 
-
-        # self.PanelCanvas = wx.Panel(self.Panel, wx.ID_ANY)
         self.PanelCanvas = wx.Panel(self.Panel, -1)
         self.figure = Figure(figsize=(figsize[0],figsize[1]))
-        # self.figure.canvas.mpl_connect('button_press_event', self.onFigureClick)
         self.canvas = FigureCanvas(self.PanelCanvas, -1, self.figure)
-        # self.canvas.mpl_connect('button_press_event', self.onFigureClick)
-        # self.canvas.mpl_connect('button_release_event', self.onFigureRelease)
-        # self.axes = self.figure.add_axes([0,0,1,1])
-        # self.axes = self.figure.add_axes([0.1,0.1,0.9,0.9])
 
         self.AnimationBtn = wx.Button(self.Panel, wx.ID_ANY, "Animation")
-        self.AnimationBtn.Bind(wx.EVT_BUTTON, self.onAnimationBtn)
         self.startTimeTxt = wx.TextCtrl(self.Panel, wx.ID_ANY, "1", style=wx.TE_CENTRE|wx.TE_PROCESS_ENTER)
-        self.startTimeTxt.Bind(wx.EVT_TEXT_ENTER, self.onstartTimeTxt)
         self.endTimeTxt = wx.TextCtrl(self.Panel, wx.ID_ANY, "1", style=wx.TE_CENTRE|wx.TE_PROCESS_ENTER)
-        self.endTimeTxt.Bind(wx.EVT_TEXT_ENTER, self.onendTimeTxt)
         self.ZoomInBtn = wx.Button(self.Panel, wx.ID_ANY, "Zoom In")
-        self.ZoomInBtn.Bind(wx.EVT_BUTTON, self.onZoomInBtn)
         self.ZoomOutBtn = wx.Button(self.Panel, wx.ID_ANY, "Zoom Out")
-        self.ZoomOutBtn.Bind(wx.EVT_BUTTON, self.onZoomOutBtn)
         self.PrintBtn = wx.Button(self.Panel, wx.ID_ANY, "Print")
+
+        # bind the menu event to an event handler
+        self.OpenFileBtn.Bind(wx.EVT_BUTTON, self.onOpenFile)
+        self.CrocoVariableChoice.Bind(wx.EVT_CHOICE, self.onCrocoVariableChoice)
+        self.DerivedVariableChoice.Bind(wx.EVT_CHOICE, self.onDerivedVariableChoice)
+        self.ResetColorBtn.Bind(wx.EVT_BUTTON, self.onResetColorBtn)
+        self.MinColorTxt.Bind(wx.EVT_TEXT_ENTER, self.onMinColorTxt)
+        self.MaxColorTxt.Bind(wx.EVT_TEXT_ENTER, self.onMaxColorTxt)
+        self.TimeMinusBtn.Bind(wx.EVT_BUTTON, self.onTimeMinusBtn)
+        self.TimeTxt.Bind(wx.EVT_TEXT_ENTER, self.onTimeTxt)
+        self.TimePlusBtn.Bind(wx.EVT_BUTTON, self.onTimePlusBtn)
+        self.LevelMinusBtn.Bind(wx.EVT_BUTTON, self.onLevelMinusBtn)
+        self.LevelPlusBtn.Bind(wx.EVT_BUTTON, self.onLevelPlusBtn)
+        self.LevelTxt.Bind(wx.EVT_TEXT_ENTER, self.onLevelTxt)
+        self.LonSectionBtn.Bind(wx.EVT_BUTTON, self.onLonSectionBtn)
+        self.LonSectionTxt.Bind(wx.EVT_TEXT_ENTER, self.onLonSectionTxt)
+        self.LatSectionBtn.Bind(wx.EVT_BUTTON, self.onLatSectionBtn)
+        self.LatSectionTxt.Bind(wx.EVT_TEXT_ENTER, self.onLatSectionTxt)
+        self.HovmullerBtn.Bind(wx.EVT_BUTTON, self.onHovmullerBtn)
+        self.TimeSeriesBtn.Bind(wx.EVT_BUTTON, self.onTimeSeriesBtn)
+        self.VerticalProfileBtn.Bind(wx.EVT_BUTTON, self.onVerticalProfileBtn)
+        self.AnimationBtn.Bind(wx.EVT_BUTTON, self.onAnimationBtn)
+        self.startTimeTxt.Bind(wx.EVT_TEXT_ENTER, self.onstartTimeTxt)
+        self.endTimeTxt.Bind(wx.EVT_TEXT_ENTER, self.onendTimeTxt)
+        self.ZoomInBtn.Bind(wx.EVT_BUTTON, self.onZoomInBtn)
+        self.ZoomOutBtn.Bind(wx.EVT_BUTTON, self.onZoomOutBtn)
         self.PrintBtn.Bind(wx.EVT_BUTTON, self.onPrintBtn)
 
         # self.__set_properties()
         self.__do_layout()
 
+        # ceate a sectionFrame instance to plot XY section
         self.sectionXY = SectionFrame()
 
         self.currentDirectory = os.getcwd()
 
     def __do_layout(self):
+
+        """
+        Use a sizer to layout the controls, stacked vertically or horizontally
+        """
 
         topSizer        = wx.BoxSizer(wx.HORIZONTAL)
         leftSizer        = wx.BoxSizer(wx.VERTICAL)
@@ -537,22 +605,34 @@ class CrocoGui(wx.Frame):
         rightSizer.Add(colorSizer, 0, wx.ALL|wx.EXPAND, 5)
 
         topSizer.Add(leftSizer, 0,wx.ALL|wx.EXPAND, 5 )
-        # topSizer.Add(rightSizer, 0,wx.ALL|wx.EXPAND, 5 )
         topSizer.Add(rightSizer, 0,wx.EXPAND, 5 )
 
         self.Panel.SetSizer(topSizer)
         self.Panel.SetAutoLayout(True)
         topSizer.Fit(self)
 
-        # self.SetAutoLayout(True)
-        # self.SetSizer(topSizer)
 
         self.Layout()
 
+    # ------------ Event handler
+
+    def onFigureClick(self,event):
+        self.lon, self.lat = event.xdata, event.ydata
+        self.latIndex,self.lonIndex = self.findLatLonIndex(self.lon, self.lat)
+        self.LonSectionTxt.SetValue('%.2F' % self.lon)
+        self.LatSectionTxt.SetValue('%.2F' % self.lat)
+
+    def rect_select_callback(self, eclick, erelease):
+        self.xPress, self.yPress = eclick.xdata, eclick.ydata
+        self.xRelease, self.yRelease = erelease.xdata, erelease.ydata
+        self.xlim = [min(self.xPress,self.xRelease),max(self.xPress,self.xRelease)]
+        self.ylim = [ min(self.yPress,self.yRelease),max(self.yPress,self.yRelease)]
+        self.drawxy(setlim=False)
 
     def onOpenFile(self, event):
         """
-        Create and show the Open FileDialog
+        Create and show the Open FileDialog to select file name
+        Initialize few outputs
         """
         dlg = wx.FileDialog(
             self, message="Choose a file",
@@ -565,7 +645,6 @@ class CrocoGui(wx.Frame):
             paths = dlg.GetPaths()
         dlg.Destroy()
         self.croco = Croco(paths[0]) 
-        # self.OpenFileTxt.SetLabel(paths[0]) 
         timeMin = self.croco.wrapper._get_date(0)
         timeMax = self.croco.wrapper._get_date(self.croco.wrapper.ntimes-1)
         self.LabelMinMaxTime.SetLabel("Min/Max Time = "+str(timeMin)+" ... "+str(timeMax)+ "days") 
@@ -589,31 +668,6 @@ class CrocoGui(wx.Frame):
         self.endTimeIndex = self.croco.wrapper.ntimes -1
         self.CrocoVariableChoice.AppendItems(self.croco.ListOfVariables)
 
-
-    def onFigureClick(self,event):
-        self.lon, self.lat = event.xdata, event.ydata
-        self.latIndex,self.lonIndex = self.findLatLonIndex(self.lon, self.lat)
-        self.LonSectionTxt.SetValue('%.2F' % self.lon)
-        self.LatSectionTxt.SetValue('%.2F' % self.lat)
-
-    # def onFigureRelease(self,event):
-    #     self.lonRelease, self.latRelease = event.xdata, event.ydata
-    #     self.lonReleaseIndex,self.latReleaseIndex = self.findLatLonIndex(self.lonRelease, self.latRelease)
-
-    def rect_select_callback(self, eclick, erelease):
-        self.xPress, self.yPress = eclick.xdata, eclick.ydata
-        self.xRelease, self.yRelease = erelease.xdata, erelease.ydata
-        self.xlim = [min(self.xPress,self.xRelease),max(self.xPress,self.xRelease)]
-        self.ylim = [ min(self.yPress,self.yRelease),max(self.yPress,self.yRelease)]
-        self.drawxy(setlim=False)
-        print('rect_select_callback:',self.xPress, self.yPress,self.xRelease, self.yRelease)
-    #     print(" The button you used were: %s %s" % (eclick.button, erelease.button))
-
-    def findLatLonIndex(self, lonValue, latValue):
-        ''' Find nearest value is an array '''
-        a = abs(self.croco.wrapper.coords['lon_r'].values - lonValue) + \
-            abs(self.croco.wrapper.coords['lat_r'].values - latValue)
-        return np.unravel_index(a.argmin(),a.shape)
 
     def onCrocoVariableChoice(self, event):
         '''
@@ -640,10 +694,7 @@ class CrocoGui(wx.Frame):
 
     def onDerivedVariableChoice(self, event):
         self.variableName = self.DerivedVariableChoice.GetString(self.DerivedVariableChoice.GetSelection())
-        # time = str(self.timeIndex)
-        # level = str(self.levelIndex)
-        # self.variableXY = self.croco.read_nc(self.variableName, indices= "["+time+","+level+",:,:]")
-        # self.draw()
+        print "Not implemented yet"
 
     def onResetColorBtn(self,event):
         self.clim = [np.min(self.variableXY.values),np.max(self.variableXY.values)]
@@ -675,7 +726,6 @@ class CrocoGui(wx.Frame):
         self.drawxy()
 
     def onTimeTxt(self,event):
-        # !!! il faut saisir un float, à améliorer
         time = float(self.TimeTxt.GetValue())
         times = self.croco.wrapper.coords['time'].values
         # find index corresponding to the nearest instant time to plot
@@ -736,8 +786,6 @@ class CrocoGui(wx.Frame):
         if len(self.croco.variables[self.variableName].dims) < 4 :
             return
         # Get longitude section of current variable
-        # variableZ = self.croco.get_variable(self.variableName, tindex=self.timeIndex, \
-        #     xindex=self.lonIndex)
         variable = self.croco.get_variable(self.variableName, \
             xindex=self.lonIndex)
         # Get Latitude coordinates
@@ -761,8 +809,6 @@ class CrocoGui(wx.Frame):
             timeIndex=self.timeIndex)
         # Draw the plot
         self.sectionYZ.updateVariableZ()
-
-
 
     def onLonSectionTxt(self,event):
         # if variable without z dimension
@@ -772,8 +818,6 @@ class CrocoGui(wx.Frame):
         self.latIndex,self.lonIndex = self.findLatLonIndex(self.lon, self.lat) 
 
         # Get longitude section of current variable
-        # variableZ = self.croco.get_variable(self.variableName, tindex=self.timeIndex, \
-        #     xindex=self.lonIndex)
         variable = self.croco.get_variable(self.variableName, \
             xindex=self.lonIndex)
         # Get Latitude coordinates
@@ -797,7 +841,6 @@ class CrocoGui(wx.Frame):
             timeIndex=self.timeIndex)
         # Draw the plot
         self.sectionYZ.updateVariableZ()
-
 
     def onLatSectionBtn(self,event):
         # if variable without z dimension
@@ -861,7 +904,6 @@ class CrocoGui(wx.Frame):
         self.sectionXZ.updateVariableZ()
 
 
-
     def onHovmullerBtn(self,event):
         print("Hovmuller not implemented yet!!!")
 
@@ -869,9 +911,6 @@ class CrocoGui(wx.Frame):
         x = self.croco.wrapper.coords['time'].values.astype('timedelta64[D]').astype('float')
         y = self.croco.get_variable(self.variableName, \
             xindex=self.lonIndex, yindex=self.latIndex, zindex=self.levelIndex).values
-        # try:
-        #     self.profileFrame.IsShown()
-        # except Exc
         title="{:s}, Lon={:4.1f}, Lat={:4.1f}, Depth={:4.0f}".\
             format(self.variableName,self.lon,self.lat, self.depth)    
         self.timeFrame = ProfileFrame(croco=self.croco, \
@@ -898,9 +937,6 @@ class CrocoGui(wx.Frame):
 
         x = self.croco.get_variable(self.variableName, \
             xindex=self.lonIndex, yindex=self.latIndex, tindex=self.timeIndex).values
-        # try:
-        #     self.profileFrame.IsShown()
-        # except:
         self.profileFrame = ProfileFrame(croco=self.croco, \
             x=x, y=z, \
             variableName=self.variableName, \
@@ -931,44 +967,22 @@ class CrocoGui(wx.Frame):
         self.updateVariableXY(setlim=False)
 
     def onstartTimeTxt(self,event):
-        # !!! il faut saisir un float, à améliorer
-        # self.startTime = np.timedelta64(self.startTimeTxt.GetValue(),'D')
         self.startTime = float(self.startTimeTxt.GetValue())
         times = self.croco.wrapper.coords['time'].values
         # find index corresponding to instant time to plot
-        # self.timeIndex = min( range( len(self.croco.wrapper.coords['time'].values) ), \
-        #     key=lambda j:abs(time-self.croco.wrapper.coords['time'].values[j]))
         self.startTimeIndex = min( range( len(times) ), \
             key=lambda j:abs(self.startTime-times[j]))
-        # self.startTime = float(self.startTimeTxt.GetValue())
-        # find index corresponding to instant time to plot
-        # self.startTimeIndex = min( range( len(self.croco.wrapper.coords['time'].values) ), \
-        #            key=lambda j:abs(self.startTime-self.croco.wrapper.coords['time'].values[j]))
         self.startTime = self.croco.wrapper._get_date(self.startTimeIndex)
         self.startTimeTxt.SetValue(str(self.startTime))
 
     def onendTimeTxt(self,event):
-        # !!! il faut saisir un float, à améliorer
-        # self.endTime = np.timedelta64(self.endTimeTxt.GetValue(),'D')
         self.endTime = float(self.endTimeTxt.GetValue())
         times = self.croco.wrapper.coords['time'].values
-        # self.startTime = float(self.startTimeTxt.GetValue())
         # find index corresponding to instant time to plot
         self.endTimeIndex = min( range( len(times) ), \
             key=lambda j:abs(self.endTime-times[j]))
-        # self.endTimeIndex = min( range( len(self.croco.wrapper.coords['time'].values) ), \
-        #            key=lambda j:abs(self.endTime-self.croco.wrapper.coords['time'].values[j]))
         self.endTime = self.croco.wrapper._get_date(self.endTimeIndex)
         self.endTimeTxt.SetValue(str(self.endTime))
-
-
-    def rect_select_callback(self, eclick, erelease):
-        self.xPress, self.yPress = eclick.xdata, eclick.ydata
-        self.xRelease, self.yRelease = erelease.xdata, erelease.ydata
-        self.xlim = [min(self.xPress,self.xRelease),max(self.xPress,self.xRelease)]
-        self.ylim = [ min(self.yPress,self.yRelease),max(self.yPress,self.yRelease)]
-        self.drawxy(setlim=False)
-    #     print(" The button you used were: %s %s" % (eclick.button, erelease.button))
 
     def onZoomInBtn(self,event):
         self.figure.RS.set_active(True)
@@ -991,6 +1005,17 @@ class CrocoGui(wx.Frame):
             pass
         self.figure.savefig('./Figures/'+filename, dpi=self.figure.dpi)
 
+
+    #------------- Methods of class
+
+
+    def findLatLonIndex(self, lonValue, latValue):
+        ''' Find nearest  grid point of  click value '''
+        a = abs(self.croco.wrapper.coords['lon_r'].values - lonValue) + \
+            abs(self.croco.wrapper.coords['lat_r'].values - latValue)
+        return np.unravel_index(a.argmin(),a.shape)
+
+
     def updateVariableXY(self,setlim=True):
         try:
             self.variableXY = self.croco.variables[self.variableName].isel(t=self.timeIndex,z_r=self.levelIndex)
@@ -1001,11 +1026,7 @@ class CrocoGui(wx.Frame):
 
     def drawxy(self,setlim=True):
         self.figure.clf()
-        # self.canvas.Destroy()
-        # self.figure = Figure(figsize=(figsize[0],figsize[1]))
-        # self.canvas = FigureCanvas(self.PanelCanvas, -1, self.figure)
         self.canvas.mpl_connect('button_press_event', self.onFigureClick)
-        # self.canvas.mpl_connect('button_release_event', self.onFigureRelease)
 
         if setlim:
             self.mincolor = np.min(self.variableXY.values)
@@ -1043,7 +1064,6 @@ class CrocoGui(wx.Frame):
 
 
 # end of class CrocoGui
-
 
 
 # Run the program
