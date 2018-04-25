@@ -12,6 +12,13 @@ from io_xarray import return_xarray_dataarray, return_xarray_dataset
 
 second2day = 1. /86400.
 
+path = "/home/datawork-lops-osi/cmenesg/moz/moz_256x120_ts5_tb0_hc10_new_skpp_bkpp/t1/CROCO_FILES/"
+keymap_files = {
+    'coordinate_file' : path+"moz_his.nc",
+    'metric_file' : path+"moz_his.nc",
+    'mask_file' : path+"moz_his.nc",
+    'variable_file' : path+"moz_his.nc" 
+}
 
 keymap_dimensions = {
     'x_rho': 'x_r',
@@ -66,10 +73,10 @@ class CrocoWrapper(object):
     oocgcm.core.grids.generic_2d_grid from croco output files.
     """
     def __init__(self,
-    				 coordinate_file=None,
-                     metrics_file=None,
-                     mask_file=None,
-                     variable_file=None,
+    				 # coordinate_file=None,
+         #             metrics_file=None,
+         #             mask_file=None,
+         #             variable_file=None,
                      chunks=None,mask_level=0):
         """This holder uses the files meshhgr.nc and mask.nc
         Parameters
@@ -84,11 +91,11 @@ class CrocoWrapper(object):
             index of the level from which the masks should be loaded
         """
 
-        self.coordinate_file = coordinate_file
-        self.metrics_file  = metrics_file
-        self.mask_file  = mask_file
-        self.variable_file  = variable_file
-
+        # self.coordinate_file = coordinate_file
+        # self.metrics_file  = metrics_file
+        # self.mask_file  = mask_file
+        # self.variable_file  = variable_file
+        self.keymap_files = keymap_files
         self.keymap_dimensions=keymap_dimensions
         self.keymap_coordinates=keymap_coordinates
         self.keymap_metrics=keymap_metrics
@@ -123,24 +130,24 @@ class CrocoWrapper(object):
     	return self.coords['time'].values[tindex]
 
     def change_dimensions(self,ds):
-    	for key,val in self.keymap_dimensions.items():
-			ds = ds.rename({key:val})
+        for key,val in self.keymap_dimensions.items():
+            ds = ds.rename({key:val})
         return ds
 
     def change_coords(self,ds):
     	for key,val in self.keymap_coordinates.items():
-			ds = ds.rename({key:val})    	
+            ds = ds.rename({key:val})
     	return ds
 
     def change_metrics(self,ds):
-    	for key,val in self.keymap_metrics.items():
-			ds = ds.rename({key:val})    	
-    	return ds
+        for key,val in self.keymap_metrics.items():
+            ds = ds.rename({key:val})    	
+        return ds
 
     def change_mask(self,ds):
-    	for key,val in self.keymap_masks.items():
-			ds = ds.rename({key:val})    	
-    	return ds
+        for key,val in self.keymap_masks.items():
+            ds = ds.rename({key:val})    	
+        return ds
 
     def define_dimensions(self,ds):
     	self.L = ds.dims['x_r']
@@ -150,14 +157,14 @@ class CrocoWrapper(object):
     	self.ntimes = ds.dims['t']
 
     def define_coordinates(self):
-    	ds = return_xarray_dataset(self.coordinate_file)
-    	ds = self.change_dimensions(ds)
-    	ds = self.change_coords(ds)
-    	self.dscoord = ds
-    	# for key,val in self.keymap_coordinates.items():
-     #    	self.coords[val] = self._get(self.dscoord,val,chunks=self.chunks,decode_times=False)
-     	lon_r = self._get(self.dscoord,'lon_r',chunks=self.chunks,decode_times=False)
-     	lat_r = self._get(self.dscoord,'lat_r',chunks=self.chunks,decode_times=False)
+        ds = return_xarray_dataset(self.keymap_files['coordinate_file'])
+        ds = self.change_dimensions(ds)
+        ds = self.change_coords(ds)
+        self.dscoord = ds
+        # for key,val in self.keymap_coordinates.items():
+        #    	self.coords[val] = self._get(self.dscoord,val,chunks=self.chunks,decode_times=False)
+        lon_r = self._get(self.dscoord,'lon_r',chunks=self.chunks,decode_times=False)
+        lat_r = self._get(self.dscoord,'lat_r',chunks=self.chunks,decode_times=False)
         self.coords['lon_r'] = lon_r
         self.coords['lat_r'] = lat_r
         self.coords['lon_u'] = 0.5*(lon_r[:,:-1]+lon_r[:,1:])
@@ -168,13 +175,13 @@ class CrocoWrapper(object):
         self.coords['lat_w'] =lat_r
 
         # time = time - time_origin
-     	self.coords['time'] = self._get(self.dscoord,'time',chunks=self.chunks,decode_times=False)
+        self.coords['time'] = self._get(self.dscoord,'time',chunks=self.chunks,decode_times=False)
         self.coords['time'].values=np.array(self.coords['time'], dtype='datetime64[D]') - \
-        	np.array(self.coords['time'].time_origin, dtype='datetime64[D]')
+            np.array(self.coords['time'].time_origin, dtype='datetime64[D]')
         self.coords['time'].values=	self.coords['time'].values / np.timedelta64(1, 'D')
 
     def define_metrics(self):
-    	ds = return_xarray_dataset(self.metrics_file)
+    	ds = return_xarray_dataset(self.keymap_files['metric_file'])
     	ds = self.change_dimensions(ds)
     	ds = self.change_coords(ds)
     	ds = self.change_metrics(ds)
@@ -183,7 +190,7 @@ class CrocoWrapper(object):
         	self.metrics[val] = self._get(self.dsmetrics,val,chunks=self.chunks)
 
     def define_masks(self):
-    	ds = return_xarray_dataset(self.mask_file)
+    	ds = return_xarray_dataset(self.keymap_files['mask_file'])
     	ds = self.change_dimensions(ds)
     	ds = self.change_coords(ds)
     	ds = self.change_mask(ds)
@@ -192,7 +199,7 @@ class CrocoWrapper(object):
         	self.masks[val] = self._get(self.dsmask,val,chunks=self.chunks)
 
     def define_variables(self):
-    	ds = return_xarray_dataset(self.variable_file)
+    	ds = return_xarray_dataset(self.keymap_files['variable_file'])
     	ds = self.change_dimensions(ds)
     	ds = self.change_coords(ds)
     	self.dsvar = ds

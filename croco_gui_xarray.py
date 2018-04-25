@@ -432,13 +432,14 @@ class CrocoGui(wx.Frame):
 
         # Create the window
         wx.Frame.__init__(self, None, wx.ID_ANY, title='Main Window')
+        self.Bind(wx.EVT_CLOSE, self.OnClose)
 
         # Now create the Panel to put the other controls on.
         self.Panel = wx.Panel(self, wx.ID_ANY)
 
         # and a few controls
-        self.OpenFileBtn = wx.Button(self.Panel, wx.ID_ANY, "Open History File ...")
-        self.OpenFileTxt = wx.StaticText(self.Panel, wx.ID_ANY, " ", style=wx.ALIGN_LEFT)
+        # self.OpenFileBtn = wx.Button(self.Panel, wx.ID_ANY, "Open History File ...")
+        # self.OpenFileTxt = wx.StaticText(self.Panel, wx.ID_ANY, " ", style=wx.ALIGN_LEFT)
 
         self.CrocoVariableChoice = wx.Choice(self.Panel, wx.ID_ANY, choices=["Croco Variables ..."])
         self.CrocoVariableChoice.SetSelection(0)
@@ -483,7 +484,7 @@ class CrocoGui(wx.Frame):
         self.PrintBtn = wx.Button(self.Panel, wx.ID_ANY, "Print")
 
         # bind the menu event to an event handler
-        self.OpenFileBtn.Bind(wx.EVT_BUTTON, self.onOpenFile)
+        # self.OpenFileBtn.Bind(wx.EVT_BUTTON, self.onOpenFile)
         self.CrocoVariableChoice.Bind(wx.EVT_CHOICE, self.onCrocoVariableChoice)
         self.DerivedVariableChoice.Bind(wx.EVT_CHOICE, self.onDerivedVariableChoice)
         self.ResetColorBtn.Bind(wx.EVT_BUTTON, self.onResetColorBtn)
@@ -517,6 +518,8 @@ class CrocoGui(wx.Frame):
 
         self.currentDirectory = os.getcwd()
 
+        self.openCroco()
+
     def __do_layout(self):
 
         """
@@ -526,7 +529,7 @@ class CrocoGui(wx.Frame):
         topSizer        = wx.BoxSizer(wx.HORIZONTAL)
         leftSizer        = wx.BoxSizer(wx.VERTICAL)
         rightSizer        = wx.BoxSizer(wx.VERTICAL)
-        openFileSizer   = wx.BoxSizer(wx.VERTICAL)
+        # openFileSizer   = wx.BoxSizer(wx.VERTICAL)
         chooseVariablesSizer = wx.BoxSizer(wx.HORIZONTAL)
         colorSizer      = wx.BoxSizer(wx.HORIZONTAL)
         labelTimeSizer  = wx.BoxSizer(wx.HORIZONTAL)
@@ -544,8 +547,8 @@ class CrocoGui(wx.Frame):
         canvasSizer     = wx.BoxSizer(wx.VERTICAL)
         buttonsSizer    = wx.BoxSizer(wx.HORIZONTAL)
 
-        openFileSizer.Add(self.OpenFileBtn, 0, wx.ALL, 5)
-        openFileSizer.Add(self.OpenFileTxt, 1, wx.ALL|wx.EXPAND, 5)
+        # openFileSizer.Add(self.OpenFileBtn, 0, wx.ALL, 5)
+        # openFileSizer.Add(self.OpenFileTxt, 1, wx.ALL|wx.EXPAND, 5)
         chooseVariablesSizer.Add(self.CrocoVariableChoice, 0, wx.ALL, 5)
         chooseVariablesSizer.Add(self.DerivedVariableChoice, 0, wx.ALL, 5)
 
@@ -586,7 +589,7 @@ class CrocoGui(wx.Frame):
         buttonsSizer.Add(self.ZoomOutBtn,0, wx.ALL, 5)
         buttonsSizer.Add(self.PrintBtn,0, wx.ALL, 5)
 
-        leftSizer.Add(openFileSizer, 0,wx.ALL|wx.EXPAND, 5 )
+        # leftSizer.Add(openFileSizer, 0,wx.ALL|wx.EXPAND, 5 )
         leftSizer.Add(chooseVariablesSizer, 0, wx.ALL|wx.EXPAND, 5)
         leftSizer.Add(labelTimeSizer, 0, wx.ALL|wx.EXPAND, 5)
         leftSizer.Add(labelMinMaxTimeSizer, 0, wx.ALL|wx.EXPAND, 5)
@@ -615,6 +618,11 @@ class CrocoGui(wx.Frame):
         self.Layout()
 
     # ------------ Event handler
+    def OnClose(self,event):
+    	# self.Close()
+        self.Destroy()
+        sys.exit()
+
 
     def onFigureClick(self,event):
         self.lon, self.lat = event.xdata, event.ydata
@@ -629,22 +637,23 @@ class CrocoGui(wx.Frame):
         self.ylim = [ min(self.yPress,self.yRelease),max(self.yPress,self.yRelease)]
         self.drawxy(setlim=False)
 
-    def onOpenFile(self, event):
+    # def onOpenFile(self, event):
+    def openCroco(self):
         """
         Create and show the Open FileDialog to select file name
         Initialize few outputs
         """
-        dlg = wx.FileDialog(
-            self, message="Choose a file",
-            defaultDir=self.currentDirectory, 
-            defaultFile="",
-            wildcard=wildcard,
-            style=wx.FD_OPEN | wx.FD_MULTIPLE | wx.FD_CHANGE_DIR
-            )
-        if dlg.ShowModal() == wx.ID_OK:
-            paths = dlg.GetPaths()
-        dlg.Destroy()
-        self.croco = Croco(paths[0]) 
+        # dlg = wx.FileDialog(
+        #     self, message="Choose a file",
+        #     defaultDir=self.currentDirectory, 
+        #     defaultFile="",
+        #     wildcard=wildcard,
+        #     style=wx.FD_OPEN | wx.FD_MULTIPLE | wx.FD_CHANGE_DIR
+        #     )
+        # if dlg.ShowModal() == wx.ID_OK:
+        #     paths = dlg.GetPaths()
+        # dlg.Destroy()
+        self.croco = Croco() 
         timeMin = self.croco.wrapper._get_date(0)
         timeMax = self.croco.wrapper._get_date(self.croco.wrapper.ntimes-1)
         self.LabelMinMaxTime.SetLabel("Min/Max Time = "+str(timeMin)+" ... "+str(timeMax)+ "days") 
@@ -694,6 +703,7 @@ class CrocoGui(wx.Frame):
 
     def onDerivedVariableChoice(self, event):
         self.variableName = self.DerivedVariableChoice.GetString(self.DerivedVariableChoice.GetSelection())
+        # print("Not implemented yet")
         print "Not implemented yet"
 
     def onResetColorBtn(self,event):
@@ -778,6 +788,7 @@ class CrocoGui(wx.Frame):
             zslice = self.croco.zslice(var.values,mask,z[minlev:maxlev+1,:,:],depth)[0]
             self.variableXY = xr.DataArray(data=zslice)
         else:
+            # print("baraotrope")
             print "baraotrope"
         self.drawxy()
 
@@ -905,7 +916,8 @@ class CrocoGui(wx.Frame):
 
 
     def onHovmullerBtn(self,event):
-        print("Hovmuller not implemented yet!!!")
+        # print("Hovmuller not implemented yet!!!")
+        print "Hovmuller not implemented yet!!!"
 
     def onTimeSeriesBtn(self,event):
         x = self.croco.wrapper.coords['time'].values.astype('timedelta64[D]').astype('float')

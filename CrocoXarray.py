@@ -18,17 +18,18 @@ class Croco(object):
     '''
     Croco class
     '''
-    def __init__(self, crocofile):
+    def __init__(self):
         '''
         Initialise the Croco object
         '''
-        msg = '--- instantiating *%s*' % (crocofile)
+        # msg = '--- instantiating *%s*' % (crocofile)
         # print(bcolors.OKGREEN + msg + bcolors.ENDC)
-        self.crocofile = crocofile
-        self.wrapper = CrocoWrapper(coordinate_file=crocofile, \
-            metrics_file=crocofile, \
-            mask_file=crocofile, \
-            variable_file=crocofile)
+        # self.crocofile = crocofile
+        self.wrapper = CrocoWrapper()
+        	# coordinate_file=crocofile, \
+         #    metrics_file=crocofile, \
+         #    mask_file=crocofile, \
+         #    variable_file=crocofile)
 
         self.r_earth = 6371315. # Mean earth radius in metres (from scalars.h)
         
