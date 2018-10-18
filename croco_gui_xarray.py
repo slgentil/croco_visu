@@ -5,6 +5,7 @@
 
 import sys
 import os
+from   shutil import copyfile
 import wx
 import time
 from datetime import datetime
@@ -18,6 +19,7 @@ import matplotlib.pyplot as plt
 # import matplotlib
 # matplotlib.use('WXAgg')
 from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigureCanvas
+import matplotlib as mpl
 from matplotlib.figure import Figure
 from matplotlib import colors
 from matplotlib import animation
@@ -70,12 +72,16 @@ class SectionFrame(wx.Frame):
         self.axes = self.figure.add_axes([0,0,1,1])
         self.canvas = FigureCanvas(self.panel, -1, self.figure)
 
-        self.AnimationBtn = wx.Button(self.panel, wx.ID_ANY, "Animation")
-        self.startTimeTxt = wx.TextCtrl(self.panel, wx.ID_ANY, "1", style=wx.TE_CENTRE|wx.TE_PROCESS_ENTER)
-        self.endTimeTxt = wx.TextCtrl(self.panel, wx.ID_ANY, "1", style=wx.TE_CENTRE|wx.TE_PROCESS_ENTER)
+        self.TimeLabel = wx.StaticText(self.panel,-1,label="Time",style = wx.ALIGN_CENTER)
+        self.TimeTxt = wx.TextCtrl(self.panel, wx.ID_ANY, " ", style=wx.TE_CENTRE|wx.TE_PROCESS_ENTER)
         self.ZoomInBtn = wx.Button(self.panel, wx.ID_ANY, "Zoom In")
         self.ZoomOutBtn = wx.Button(self.panel, wx.ID_ANY, "Zoom Out")
         self.PrintBtn = wx.Button(self.panel, wx.ID_ANY, "Print")
+
+        self.AnimationBtn = wx.Button(self.panel, wx.ID_ANY, "Animation")
+        self.startTimeTxt = wx.TextCtrl(self.panel, wx.ID_ANY, "1", style=wx.TE_CENTRE|wx.TE_PROCESS_ENTER)
+        self.endTimeTxt = wx.TextCtrl(self.panel, wx.ID_ANY, "1", style=wx.TE_CENTRE|wx.TE_PROCESS_ENTER)
+        self.SaveBtn = wx.Button(self.panel, wx.ID_ANY, "Save")
         
         self.ResetColorBtn = wx.Button(self.panel, wx.ID_ANY, "Reset Color")
         self.MinColorTxt = wx.TextCtrl(self.panel, wx.ID_ANY, "Min Color", style=wx.TE_CENTRE|wx.TE_PROCESS_ENTER)
@@ -92,6 +98,8 @@ class SectionFrame(wx.Frame):
         self.ResetColorBtn.Bind(wx.EVT_BUTTON, self.onResetColorBtn)
         self.MinColorTxt.Bind(wx.EVT_TEXT_ENTER, self.onMinColorTxt)
         self.MaxColorTxt.Bind(wx.EVT_TEXT_ENTER, self.onMaxColorTxt)
+        self.SaveBtn.Bind(wx.EVT_BUTTON, self.onSaveBtn)
+        self.TimeTxt.Bind(wx.EVT_TEXT_ENTER, self.onTimeTxt)
 
         self.__do_layout()
 
@@ -105,7 +113,8 @@ class SectionFrame(wx.Frame):
         self.sliceCoord = sliceCoord
         self.timeIndex = timeIndex
         if croco is not None:
-            self.time = self.croco.wrapper.coords['time']
+            self.time = self.croco.wrapper._get_date(0)
+            self.TimeTxt.SetValue(str(self.time))
         if typSection == "XZ":
             self.xlabel = "Longitude"
             self.ylabel = "Depth"
@@ -130,21 +139,29 @@ class SectionFrame(wx.Frame):
         """
         topSizer        = wx.BoxSizer(wx.VERTICAL)
         canvasSizer     = wx.BoxSizer(wx.VERTICAL)
+        timeSizer       = wx.BoxSizer(wx.HORIZONTAL)
         buttonsSizer    = wx.BoxSizer(wx.HORIZONTAL)
         colorSizer      = wx.BoxSizer(wx.HORIZONTAL)
 
         canvasSizer.Add(self.canvas, 0, wx.ALL, 5)
+
+        timeSizer.Add(self.TimeLabel,0, wx.ALL, 5)
+        timeSizer.Add(self.TimeTxt,0, wx.ALL, 5)
+        timeSizer.Add(self.ZoomInBtn,0, wx.ALL, 5)
+        timeSizer.Add(self.ZoomOutBtn,0, wx.ALL, 5)
+        timeSizer.Add(self.PrintBtn,0, wx.ALL, 5)
+
         buttonsSizer.Add(self.AnimationBtn,0, wx.ALL, 5)
-        buttonsSizer.Add(self.startTimeTxt,1, wx.ALL, 5)
-        buttonsSizer.Add(self.endTimeTxt,1, wx.ALL, 5)
-        buttonsSizer.Add(self.ZoomInBtn,0, wx.ALL, 5)
-        buttonsSizer.Add(self.ZoomOutBtn,0, wx.ALL, 5)
-        buttonsSizer.Add(self.PrintBtn,0, wx.ALL, 5)
+        buttonsSizer.Add(self.startTimeTxt,0, wx.ALL, 5)
+        buttonsSizer.Add(self.endTimeTxt,0, wx.ALL, 5)
+        buttonsSizer.Add(self.SaveBtn,0, wx.ALL, 5)
+
         colorSizer.Add(self.ResetColorBtn, 0, wx.ALL, 5)
         colorSizer.Add(self.MinColorTxt, 0, wx.ALL, 5)
         colorSizer.Add(self.MaxColorTxt, 0, wx.ALL, 5)
 
         topSizer.Add(canvasSizer, 0, wx.CENTER)
+        topSizer.Add(timeSizer, 0, wx.ALL|wx.EXPAND, 5)
         topSizer.Add(buttonsSizer, 0, wx.ALL|wx.EXPAND, 5)
         topSizer.Add(colorSizer, 0, wx.ALL|wx.EXPAND, 5)
 
@@ -173,22 +190,33 @@ class SectionFrame(wx.Frame):
     # Event handler for animation
     def onAnimationBtn(self,event):
         """Event handler for the button click Animation button"""
+        os.system('rm -rf ./Figures/dummy.mp4')
+        try:
+            os.makedirs('./Figures')
+        except:
+            pass 
+        self.clim = [np.min(self.variable),np.max(self.variable)]
+        save_count = self.endTimeIndex - self.startTimeIndex + 1
+        self.anim = animation.FuncAnimation(self.figure, self.animate, \
+                   frames = range(self.startTimeIndex,self.endTimeIndex+1), repeat=False, \
+                   blit = False, save_count=save_count)
+        # self.canvas.draw()
+        mpl.verbose.set_level("helpful")
+        self.anim.save('./Figures/dummy.mp4')
+
+    # Event handler for Save animation
+    def onSaveBtn(self,event): 
+        """Event handler for the button click Animation button"""
         os.system('rm -rf ./Figures/'+self.variableName+'.mp4')
         try:
             os.makedirs('./Figures')
         except:
-            pass
-        self.clim = [np.min(self.variable),np.max(self.variable)]
-        save_count = self.endTimeIndex - self.startTimeIndex + 1
-        anim = animation.FuncAnimation(self.figure, self.animate, \
-                   frames = range(self.startTimeIndex,self.endTimeIndex+1), repeat=False, \
-                   blit = False, save_count=save_count)
-        self.canvas.draw()
+            pass 
         time1 = str(self.croco.wrapper._get_date(self.startTimeIndex))
         time2 = str(self.croco.wrapper._get_date(self.endTimeIndex))
-        filename = "{:s}_{:s}{:4.1f}_{:s}-{:s}.mp4".format(self.variableName,self.slice,self.sliceCoord, \
-            time1,time2).replace(" ", "")
-        anim.save('./Figures/'+filename)
+        filename = "{:s}_{:s}{:4.1f}_Time{:s}-{:s}.mp4".format(self.variableName,self.slice,self.sliceCoord, \
+            time1,time2).replace(" ", "") 
+        copyfile('./Figures/dummy.mp4','./Figures/'+filename )
 
     def animate( self, i):
         """ Function to plot animation in canvas """
@@ -205,16 +233,27 @@ class SectionFrame(wx.Frame):
         self.startTime = self.croco.wrapper._get_date(self.startTimeIndex)
         self.startTimeTxt.SetValue(str(self.startTime))
 
+    # Event handler for Time dialog
     def onendTimeTxt(self,event):
         """Event handler for Enter key in end time text """
         self.endTime = float(self.endTimeTxt.GetValue())
         times = self.croco.wrapper.coords['time'].values
-        # find index corresponding to the nearest instant time to plot
+        # find nearest index corresponding to instant time to plot
         self.endTimeIndex = min( range( len(times) ), \
             key=lambda j:abs(self.endTime-times[j]))
         self.endTime = self.croco.wrapper._get_date(self.endTimeIndex)
         self.endTimeTxt.SetValue(str(self.endTime))
 
+    def onTimeTxt(self,event):
+        """Event handler for Enter key in end time text """
+        time = float(self.TimeTxt.GetValue())
+        times = self.croco.wrapper.coords['time'].values
+        # find index corresponding to the nearest instant time to plot
+        self.timeIndex = min( range( len(times) ), \
+            key=lambda j:abs(time-times[j]))
+        self.time = self.croco.wrapper._get_date(self.timeIndex)
+        self.TimeTxt.SetValue(str(self.time))
+        self.updateVariableZ()
 
     # Event handler for zoom
     def onZoomInBtn(self,event):    
@@ -619,7 +658,6 @@ class CrocoGui(wx.Frame):
 
     # ------------ Event handler
     def OnClose(self,event):
-    	# self.Close()
         self.Destroy()
         sys.exit()
 

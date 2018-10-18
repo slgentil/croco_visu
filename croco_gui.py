@@ -20,7 +20,8 @@ from matplotlib.figure import Figure
 from matplotlib import colors
 from matplotlib import animation
 from matplotlib.widgets  import RectangleSelector
-from CrocoXarray import Croco
+from Croco import Croco
+# from CrocoXarray import Croco
 from myplot import plotCurv, mypcolor
 
 wildcard = "Netcdf Files (*.nc)|*.nc"
@@ -159,7 +160,7 @@ class SectionFrame(wx.Frame):
         self.drawz()
 
     def onPrintBtn(self,event):
-        filename = self.variableName + ".png"
+        filename = 'Figures/'+self.variableName + ".png"
         self.figure.savefig(filename, dpi=self.figure.dpi)
 
     def onResetColorBtn(self,event):
@@ -752,7 +753,7 @@ class CrocoGui(wx.Frame):
         title="{:s}, Lon={:4.1f}, Lat={:4.1f}, Depth={:4.1f}".\
             format(self.variableName,self.lonPress,self.latPress,\
             self.levelIndex)
-        plotCurv(self.profileFrame.figure,profile,title=title)
+        plotCurv(self.profileFrame,profile,title=title)
         self.profileFrame.canvas.draw()
         self.profileFrame.canvas.Refresh()
         self.profileFrame.Show()
@@ -777,7 +778,7 @@ class CrocoGui(wx.Frame):
             self.profileFrame.IsShown()
         except:
             self.profileFrame = ProfileFrame()
-        plotCurv(self.profileFrame.figure,profile,z,title=title,ylabel="depth")
+        plotCurv(self.profileFrame,profile,z,title=title,ylabel="depth")
         self.profileFrame.canvas.draw()
         self.profileFrame.canvas.Refresh()
         self.profileFrame.Show()
@@ -833,7 +834,7 @@ class CrocoGui(wx.Frame):
         self.drawxy()
 
     def onPrintBtn(self,event):
-        filename = self.variableName + ".png"
+        filename = './Figures/'+self.variableName + ".png"
         self.figure.savefig(filename, dpi=self.figure.dpi)
 
     def updateVariableXY(self,setlim=True):

@@ -12,7 +12,7 @@ from io_xarray import return_xarray_dataarray, return_xarray_dataset
 
 second2day = 1. /86400.
 
-path = "/home/datawork-lops-osi/cmenesg/moz/moz_256x120_ts5_tb0_hc10_new_skpp_bkpp/t1/CROCO_FILES/"
+path = "./"
 keymap_files = {
     'coordinate_file' : path+"moz_his.nc",
     'metric_file' : path+"moz_his.nc",

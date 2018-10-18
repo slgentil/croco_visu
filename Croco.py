@@ -568,7 +568,6 @@ class CrocoGrid (Croco):
             raise Exception("Unknown scoord, should be 'new2008' or 'old1994'")
         if self.sc_r is None:
             self.sc_r = sc_r
-        print z.squeeze()[:,128,128]
         return z.squeeze(), np.float32(Cs)
 
 
