@@ -657,17 +657,17 @@ class CrocoGui(wx.Frame):
         self.drawxy()
 
     def onLevelTxt(self,event):
-        time = str(self.timeIndex)
+        timestr = str(self.timeIndex)
         depth = float(self.LevelTxt.GetValue())
         if depth > 0:
             self.levelIndex = int(self.LevelTxt.GetValue()) - 1
             self.updateVariableXY()
             self.drawxy()
-        elif depth < 0:
-            zeta = self.croco.read_nc('ssh', indices= "["+time+",:,:]")
+        elif depth <= 0:
+            zeta = self.croco.read_nc('ssh', indices= "["+timestr+",:,:]")
             z = self.croco.crocoGrid.scoord2z_r(zeta, alpha=0., beta=0.)
             minlev,maxlev = self.croco.crocoGrid.zslice(None,self.croco.crocoGrid.maskr(),z,depth,findlev=True)
-            indices= "["+time+","+str(minlev)+":"+str(maxlev+1)+",:,:]"
+            indices= "["+timestr+","+str(minlev)+":"+str(maxlev+1)+",:,:]"
             var = self.croco.read_nc(self.variableName, indices=indices)
             dims = self.croco.read_var_dim(self.variableName)
             if "x_u" in dims:
@@ -678,8 +678,12 @@ class CrocoGui(wx.Frame):
                 z = self.croco.crocoGrid.rho2v_3d(z)
             else:
                 mask = self.croco.crocoGrid.maskr()
-            self.variableXY = self.croco.crocoGrid.zslice(var[:,:,:],mask,z[minlev:maxlev+1,:,:],depth)[0]
-            self.drawxy(setlim=False)
+            try:
+                self.variableXY = self.croco.crocoGrid.zslice(var[:,:,:],mask,z[minlev:maxlev+1,:,:],depth)[0]
+                self.drawxy(setlim=False)
+            except:
+                print("Not enough points")
+                pass
         else:
             print "barotrope"
 

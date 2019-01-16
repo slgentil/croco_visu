@@ -7,6 +7,7 @@ import os
 import wx
 import numpy as np
 import netCDF4 as netcdf
+from scipy import interpolate
 
 second2day = 1. /86400.
 
@@ -752,11 +753,16 @@ class CrocoGrid (Croco):
         if findlev==True:
             return minlev,maxlev
 
+        # if maxlev-minlev==0:
+        #     print("Not enough points")
+        #     return 
+
         # Do the interpolation
         z1 = np.zeros_like(z[0,:,:])
         z2 = np.zeros_like(z[0,:,:])
         v1 = np.zeros_like(z[0,:,:])
         v2 = np.zeros_like(z[0,:,:])
+
         for j in range(Mp):
             for i in range(Lp):
                 k = levs[j,i]
@@ -764,6 +770,37 @@ class CrocoGrid (Croco):
                 z2[j,i] = z[k,j,i]
                 v1[j,i] = var[k+1,j,i]
                 v2[j,i] = var[k,j,i]
-        vnew=mask*(((v1-v2)*depth+v2*z1-v1*z2)/(z1-z2))
+        zmask = np.where(z2>depth,np.nan,1)
+        vnew=zmask*(((v1-v2)*depth+v2*z1-v1*z2)/(z1-z2))
         return vnew,minlev,maxlev
 
+
+    def zslice2(self,var,mask,z,depth,findlev=False):
+        """
+        #
+        #
+        # This function interpolate a 3D variable on a horizontal level of constant
+        # depth with scipy interp1d
+        #
+        # On Input:  
+        # 
+        #    var     Variable to process (3D matrix).
+        #    z       Depths (m) of RHO- or W-points (3D matrix).
+        #    depth   Slice depth (scalar meters, negative).
+        # 
+        # On Output: 
+        #
+        #    vnew    Horizontal slice (2D matrix). 
+        #
+        #
+        """
+        [N,Mp,Lp]=z.shape
+        vnew = np.zeros_like(z[0,:,:])
+
+        for j in range(Mp):
+            for i in range (Lp):
+                f = interpolate.interp1d(z[:,j,i], var[:,j,i],bounds_error=False)
+                vnew[j,i] = f([depth])
+
+        return vnew
+        
