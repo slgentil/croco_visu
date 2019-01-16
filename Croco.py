@@ -156,7 +156,13 @@ class Croco(object):
                 time.sleep(0.5)
         return keys
 
-
+    def get_run_name(self):
+        index = self.crocofile.find("/CROCO_FILES")
+        if index == -1:
+            self.runName = ''
+        else:
+            self.runName = os.path.basename(os.path.dirname(self.crocofile[:index]))
+        return self.runName
 
     @staticmethod
     def half_interp(h_one, h_two):

@@ -107,12 +107,9 @@ class SectionFrame(wx.Frame):
 
     def onFigureClick(self,event):
         self.xPress, self.yPress = event.xdata, event.ydata
-        print self.xPress, self.yPress
 
     def onFigureRelease(self,event):
         self.xRelease, self.yRelease = event.xdata, event.ydata
-        print('onFigureRelease:',self.xRelease, self.yRelease)
-        # self.lonReleaseIndex,self.latReleaseIndex = self.findLatLonIndex(self.lonRelease, self.latRelease)
 
     def rect_select_callback(self, eclick, erelease):
         self.xPress, self.yPress = eclick.xdata, eclick.ydata
@@ -120,8 +117,6 @@ class SectionFrame(wx.Frame):
         self.xlim = [min(self.xPress,self.xRelease),max(self.xPress,self.xRelease)]
         self.ylim = [ min(self.yPress,self.yRelease),max(self.yPress,self.yRelease)]
         self.drawz(setlim=False)
-        print('rect_select_callback:',self.xPress, self.yPress,self.xRelease, self.yRelease)
-    #     print(" The button you used were: %s %s" % (eclick.button, erelease.button))
 
     def onAnimationBtn(self,event):
         os.system('rm -rf ./Figures/'+self.variableName+'.mp4')
@@ -160,7 +155,11 @@ class SectionFrame(wx.Frame):
         self.drawz()
 
     def onPrintBtn(self,event):
-        filename = 'Figures/'+self.variableName + ".png"
+        printDir = self.croco.path_script+"/Figures_" + self.croco.get_run_name()+"/"
+        if not os.path.isdir(printDir):
+                os.mkdir(printDir)
+        filename = printDir+"section_"+self.title + ".png"
+        # filename = printDir+self.variableName + ".png"
         self.figure.savefig(filename, dpi=self.figure.dpi)
 
     def onResetColorBtn(self,event):
@@ -205,9 +204,9 @@ class SectionFrame(wx.Frame):
             self.MaxColorTxt.SetValue('%.2E' % self.maxcolor)
             self.xlim = [np.min(self.x),np.max(self.x)]
             self.ylim = [np.min(self.y),np.max(self.y)]
-        title = "{:s}, {:s}={:4.1f}, Time={:4.1f}".format(self.variableName,self.section,self.latlon,self.time)
+        self.title = "{:s}, {:s}={:4.1f}, Time={:4.1f}".format(self.variableName,self.section,self.latlon,self.time)
         mypcolor(self,self.x,self.y,self.variableZ,\
-                      title=title,\
+                      title=self.title,\
                       xlabel=self.xlabel,\
                       ylabel='Depth',\
                       xlim=self.xlim,\
@@ -223,12 +222,13 @@ class SectionFrame(wx.Frame):
 
 class ProfileFrame(wx.Frame):
 
-    def __init__(self):
+    def __init__(self, croco):
 
         """Constructor"""
 
         wx.Frame.__init__(self, None, wx.ID_ANY, title='Profile')
 
+        self.croco = croco
         self.panel = wx.Panel(self, wx.ID_ANY)
 
         self.figure = Figure()
@@ -265,14 +265,58 @@ class ProfileFrame(wx.Frame):
 
         # self.Layout()
 
+    def onFigureClick(self,event):
+        self.xPress, self.yPress = event.xdata, event.ydata
+
+    def onFigureRelease(self,event):
+        self.xRelease, self.yRelease = event.xdata, event.ydata
+
+    def rect_select_callback(self, eclick, erelease):
+        self.xPress, self.yPress = eclick.xdata, eclick.ydata
+        self.xRelease, self.yRelease = erelease.xdata, erelease.ydata
+        self.xlim = [min(self.xPress,self.xRelease),max(self.xPress,self.xRelease)]
+        self.ylim = [ min(self.yPress,self.yRelease),max(self.yPress,self.yRelease)]
+        # self.drawCurv(profile=self.profile,z=self.z,title=self.title,
+        #               ylabel=self.ylabel,setlim=False)
+        self.drawCurv(setlim=False)
+
     def onZoomInBtn(self,event):
-        print("ZoomInBtn")
+        self.figure.RS.set_active(True)
 
     def onZoomOutBtn(self,event):
-        print("ZoomOutBtn")
+        # self.drawCurv(profile=self.profile,z=self.z,title=self.title,
+        #     ylabel=self.ylabel)
+        self.drawCurv()
 
     def onPrintBtn(self,event):
-        print("Print")
+        printDir = self.croco.path_script+"/Figures_" + self.croco.get_run_name()+"/"
+        if not os.path.isdir(printDir):
+                os.mkdir(printDir)
+        filename = printDir+"curv_"+self.title + ".png"
+        self.figure.savefig(filename, dpi=self.figure.dpi)
+
+    def drawCurv(self,profile=None,z=None,title=None,ylabel=None,setlim=True):
+        if profile is not None:
+            self.profile = profile
+            self.z = z
+            self.title = title
+            self.ylabel = ylabel
+
+        self.canvas.mpl_connect('button_press_event', self.onFigureClick)
+        self.canvas.mpl_connect('button_release_event', self.onFigureRelease)
+        if setlim:
+                self.xlim=None
+                self.ylim=None
+
+        if self.z is not None:
+            plotCurv(self,x=self.profile,y=self.z,title=self.title,ylabel=self.ylabel,
+                     xlim=self.xlim, ylim=self.ylim)
+        else:
+            plotCurv(self,x=self.profile,title=self.title,
+                     xlim=self.xlim, ylim=self.ylim)
+        self.canvas.draw()
+        self.canvas.Refresh()
+        self.Show()
 
 ########################################################################
 
@@ -330,8 +374,8 @@ class CrocoGui(wx.Frame):
         self.LatSectionBtn.Bind(wx.EVT_BUTTON, self.onLatSectionBtn)
         self.LatSectionTxt = wx.TextCtrl(self.Panel, wx.ID_ANY, "Latitude", style=wx.TE_CENTRE|wx.TE_PROCESS_ENTER)
         self.LatSectionTxt.Bind(wx.EVT_TEXT_ENTER, self.onLatSectionTxt)
-        self.HovmullerBtn = wx.Button(self.Panel, wx.ID_ANY, "Hovmuller")
-        self.HovmullerBtn.Bind(wx.EVT_BUTTON, self.onHovmullerBtn)
+        # self.HovmullerBtn = wx.Button(self.Panel, wx.ID_ANY, "Hovmuller")
+        # self.HovmullerBtn.Bind(wx.EVT_BUTTON, self.onHovmullerBtn)
         self.TimeSeriesBtn = wx.Button(self.Panel, wx.ID_ANY, "Time Series")
         self.TimeSeriesBtn.Bind(wx.EVT_BUTTON, self.onTimeSeriesBtn)
         self.VerticalProfileBtn = wx.Button(self.Panel, wx.ID_ANY, "Vertical Profile")
@@ -385,7 +429,7 @@ class CrocoGui(wx.Frame):
         levelSizer       = wx.BoxSizer(wx.HORIZONTAL)
         longitudeSizer  = wx.BoxSizer(wx.HORIZONTAL)
         latitudeSizer   = wx.BoxSizer(wx.HORIZONTAL)
-        hovmullerSizer  = wx.BoxSizer(wx.HORIZONTAL)
+        # hovmullerSizer  = wx.BoxSizer(wx.HORIZONTAL)
         timeSeriesSizer = wx.BoxSizer(wx.HORIZONTAL)
         profileSizer   = wx.BoxSizer(wx.HORIZONTAL)
         canvasSizer     = wx.BoxSizer(wx.VERTICAL)
@@ -419,7 +463,7 @@ class CrocoGui(wx.Frame):
         latitudeSizer.Add(self.LatSectionBtn, 0, wx.ALL, 5)
         latitudeSizer.Add(self.LatSectionTxt, 0, wx.ALL, 5)
 
-        hovmullerSizer.Add(self.HovmullerBtn, 0, wx.ALL, 5)
+        # hovmullerSizer.Add(self.HovmullerBtn, 0, wx.ALL, 5)
 
         timeSeriesSizer.Add(self.TimeSeriesBtn, 0, wx.ALL, 5)
 
@@ -444,7 +488,7 @@ class CrocoGui(wx.Frame):
         leftSizer.Add(levelSizer, 0, wx.ALL|wx.EXPAND, 5)
         leftSizer.Add(longitudeSizer, 0, wx.ALL|wx.EXPAND, 5)
         leftSizer.Add(latitudeSizer, 0, wx.ALL|wx.EXPAND, 5)
-        leftSizer.Add(hovmullerSizer, 0, wx.ALL|wx.EXPAND, 5)
+        # leftSizer.Add(hovmullerSizer, 0, wx.ALL|wx.EXPAND, 5)
         leftSizer.Add(timeSeriesSizer, 0, wx.ALL|wx.EXPAND, 5)
         leftSizer.Add(profileSizer, 0, wx.ALL|wx.EXPAND, 5)
         rightSizer.Add(canvasSizer, 0, wx.EXPAND)
@@ -469,6 +513,10 @@ class CrocoGui(wx.Frame):
         """
         Create and show the Open FileDialog
         """
+
+        # get path of current script croco_gui.py
+        path_script = os.path.dirname(os.path.realpath(__file__))
+
         dlg = wx.FileDialog(
             self, message="Choose a file",
             defaultDir=self.currentDirectory, 
@@ -479,7 +527,11 @@ class CrocoGui(wx.Frame):
         if dlg.ShowModal() == wx.ID_OK:
             paths = dlg.GetPaths()
         dlg.Destroy()
-        self.croco = Croco(paths[0]) 
+        self.croco = Croco(paths[0])
+
+        # get path of current script croco_gui.py
+        self.croco.path_script = path_script
+
         self.OpenFileTxt.SetLabel(paths[0])       
         self.LabelMinMaxTime.SetLabel("Min/Max Time = "+str(self.croco.times[0])+" ... "+ \
                                       str(self.croco.times[self.croco.crocoGrid.ntimes-1])) 
@@ -519,8 +571,6 @@ class CrocoGui(wx.Frame):
         self.xlim = [min(self.xPress,self.xRelease),max(self.xPress,self.xRelease)]
         self.ylim = [ min(self.yPress,self.yRelease),max(self.yPress,self.yRelease)]
         self.drawxy(setlim=False)
-        print('rect_select_callback:',self.xPress, self.yPress,self.xRelease, self.yRelease)
-    #     print(" The button you used were: %s %s" % (eclick.button, erelease.button))
 
     def findLatLonIndex(self, lonValue, latValue):
         ''' Find nearest value is an array '''
@@ -612,6 +662,7 @@ class CrocoGui(wx.Frame):
         if depth > 0:
             self.levelIndex = int(self.LevelTxt.GetValue()) - 1
             self.updateVariableXY()
+            self.drawxy()
         elif depth < 0:
             zeta = self.croco.read_nc('ssh', indices= "["+time+",:,:]")
             z = self.croco.crocoGrid.scoord2z_r(zeta, alpha=0., beta=0.)
@@ -628,9 +679,9 @@ class CrocoGui(wx.Frame):
             else:
                 mask = self.croco.crocoGrid.maskr()
             self.variableXY = self.croco.crocoGrid.zslice(var[:,:,:],mask,z[minlev:maxlev+1,:,:],depth)[0]
+            self.drawxy(setlim=False)
         else:
-            print "baraotrope"
-        self.drawxy()
+            print "barotrope"
 
     def onLonSectionBtn(self,event):
         if len(self.croco.read_var_dim(self.variableName)) < 4 :
@@ -648,7 +699,7 @@ class CrocoGui(wx.Frame):
         self.sectionYZ.xlabel = "Latitude"
         self.sectionYZ.latlon = self.lonPress
         self.sectionYZ.latlonIndex = self.lonPressIndex
-        self.sectionYZ.time = self.time
+        self.sectionYZ.time = self.croco.times[self.timeIndex]
         self.sectionYZ.variableZ = self.croco.read_nc(self.variableName, indices= "["+time+",:,:,"+lon+"]")
         self.sectionYZ.x = repmat(self.croco.crocoGrid._lat[:,self.lonPressIndex].squeeze(),self.croco.crocoGrid.N,1)
         self.sectionYZ.startTimeTxt.SetValue(str(self.croco.times[0]))
@@ -700,7 +751,7 @@ class CrocoGui(wx.Frame):
         self.sectionXZ.xlabel = "Longitude"
         self.sectionXZ.latlon = self.latPress
         self.sectionXZ.latlonIndex = self.latPressIndex
-        self.sectionXZ.time = self.time
+        self.sectionXZ.time = self.croco.times[self.timeIndex]
         self.sectionXZ.y = self.croco.crocoGrid.scoord2z_r(zeta, alpha=0., beta=0)[:,self.latPressIndex,:]
         self.sectionXZ.variableZ = self.croco.read_nc(self.variableName, indices= "["+time+",:,"+lat+",:]")
         self.sectionXZ.x = repmat(self.croco.crocoGrid._lon[self.latPressIndex,:].squeeze(),self.croco.crocoGrid.N,1)
@@ -711,14 +762,12 @@ class CrocoGui(wx.Frame):
         self.sectionXZ.endTime = self.croco.times[-1]
         self.sectionXZ.endTimeIndex = self.croco.crocoGrid.ntimes -1
         self.sectionXZ.drawz()
-        # self.canvas.draw()
 
     def onLatSectionTxt(self,event):
         if len(self.croco.read_var_dim(self.variableName)) < 4 :
             return
         self.latPress = float(self.LatSectionTxt.GetValue())
         self.latPressIndex,self.lonPressIndex = self.findLatLonIndex(self.lonPress, self.latPress) 
-        print self.lonPressIndex,self.latPressIndex
         try:
             self.sectionXZ.IsShown()
         except:
@@ -738,8 +787,8 @@ class CrocoGui(wx.Frame):
         self.sectionXZ.drawz()
 
 
-    def onHovmullerBtn(self,event):
-        print("Lat Section")
+    # def onHovmullerBtn(self,event):
+    #     print("Hovmuller")
 
     def onTimeSeriesBtn(self,event):
         lat = str(self.latPressIndex)
@@ -749,18 +798,11 @@ class CrocoGui(wx.Frame):
         try:
             self.profileFrame.IsShown()
         except Exception:           
-            self.profileFrame = ProfileFrame()
+            self.profileFrame = ProfileFrame(self.croco)
         title="{:s}, Lon={:4.1f}, Lat={:4.1f}, Depth={:4.1f}".\
             format(self.variableName,self.lonPress,self.latPress,\
             self.levelIndex)
-        plotCurv(self.profileFrame,profile,title=title)
-        self.profileFrame.canvas.draw()
-        self.profileFrame.canvas.Refresh()
-        self.profileFrame.Show()
-        # self.profileFrame.axes = self.figure.add_axes([0.1,0.1,0.9,0.9])
-        # self.profileFrame.axes.plot(profile)
-        # self.profileFrame.canvas.draw()
-        # self.profileFrame.Show()
+        self.profileFrame.drawCurv(profile,title=title)
 
     def onVerticalProfileBtn(self,event):
         if len(self.croco.read_var_dim(self.variableName)) < 4 :
@@ -777,11 +819,12 @@ class CrocoGui(wx.Frame):
         try:
             self.profileFrame.IsShown()
         except:
-            self.profileFrame = ProfileFrame()
-        plotCurv(self.profileFrame,profile,z,title=title,ylabel="depth")
-        self.profileFrame.canvas.draw()
-        self.profileFrame.canvas.Refresh()
-        self.profileFrame.Show()
+            self.profileFrame = ProfileFrame(self.croco)
+        self.profileFrame.drawCurv(profile=profile,z=z,title=title,ylabel="depth")
+        # plotCurv(self.profileFrame,profile,z,title=title,ylabel="depth")
+        # self.profileFrame.canvas.draw()
+        # self.profileFrame.canvas.Refresh()
+        # self.profileFrame.Show()
 
 
     def onAnimationBtn(self,event):
@@ -819,8 +862,7 @@ class CrocoGui(wx.Frame):
         self.xlim = [min(self.xPress,self.xRelease),max(self.xPress,self.xRelease)]
         self.ylim = [ min(self.yPress,self.yRelease),max(self.yPress,self.yRelease)]
         self.drawxy(setlim=False)
-        print('rect_select_callback:',self.xPress, self.yPress,self.xRelease, self.yRelease)
-    #     print(" The button you used were: %s %s" % (eclick.button, erelease.button))
+
 
     def onZoomInBtn(self,event):
         self.figure.RS.set_active(True)
@@ -834,7 +876,11 @@ class CrocoGui(wx.Frame):
         self.drawxy()
 
     def onPrintBtn(self,event):
-        filename = './Figures/'+self.variableName + ".png"
+        printDir = self.croco.path_script+"/Figures_" + self.croco.get_run_name()+"/"
+        if not os.path.isdir(printDir):
+                os.mkdir(printDir)
+        filename = printDir+"zslice_"+self.title + ".png"
+        # filename = printDir+self.variableName + ".png"
         self.figure.savefig(filename, dpi=self.figure.dpi)
 
     def updateVariableXY(self,setlim=True):
@@ -869,11 +915,11 @@ class CrocoGui(wx.Frame):
 
         depth = float(self.LevelTxt.GetValue())
         if depth > 0:
-            title = "{:s}, Level={:4d}, Time={:4.1f}".format(self.variableName,self.levelIndex,self.croco.times[self.timeIndex])
+            self.title = "{:s}, Level={:4d}, Time={:4.1f}".format(self.variableName,self.levelIndex,self.croco.times[self.timeIndex])
         else:
-            title = "{:s}, Depth={:4.1f}, Time={:4.1f}".format(self.variableName,depth,self.croco.times[self.timeIndex])
+            self.title = "{:s}, Depth={:4.1f}, Time={:4.1f}".format(self.variableName,depth,self.croco.times[self.timeIndex])
         mypcolor(self,self.croco.crocoGrid._lon,self.croco.crocoGrid._lat,self.variableXY,\
-                      title=title,\
+                      title=self.title,\
                       xlabel='Longitude',\
                       ylabel='Latitude',\
                       xlim=self.xlim,\
