@@ -684,8 +684,7 @@ class CrocoGui(wx.Frame):
             except:
                 print("Not enough points")
                 pass
-        else:
-            print "barotrope"
+        
 
     def onLonSectionBtn(self,event):
         if len(self.croco.read_var_dim(self.variableName)) < 4 :
@@ -797,15 +796,54 @@ class CrocoGui(wx.Frame):
     def onTimeSeriesBtn(self,event):
         lat = str(self.latPressIndex)
         lon = str(self.lonPressIndex)
-        level = str(self.levelIndex)
-        profile = self.croco.read_nc(self.variableName, indices= "[:,"+level+","+lat+","+lon+"]")
+        # timestr = str(self.timeIndex)
+        depth = float(self.LevelTxt.GetValue())
+
+        # Create window for time series is needed
         try:
             self.profileFrame.IsShown()
         except Exception:           
             self.profileFrame = ProfileFrame(self.croco)
-        title="{:s}, Lon={:4.1f}, Lat={:4.1f}, Depth={:4.1f}".\
-            format(self.variableName,self.lonPress,self.latPress,\
-            self.levelIndex)
+
+        # Time series on one level    
+        if depth > 0:
+            self.levelIndex = int(self.LevelTxt.GetValue()) - 1 
+            level = str(self.levelIndex)     
+            profile = self.croco.read_nc(self.variableName, indices= "[:,"+level+","+lat+","+lon+"]")
+            title="{:s}, Lon={:4.1f}, Lat={:4.1f}, level={:4.1f}".\
+                format(self.variableName,self.lonPress,self.latPress,self.levelIndex+1)
+
+        # Time series on one depth    
+        elif depth <= 0:
+            profile = np.zeros_like(self.croco.times)
+            # for each time step
+            for it in range(len(self.croco.times)):
+                # Calculate z
+                zeta = self.croco.read_nc('ssh', indices= "["+str(it)+",:,:]")
+                z = self.croco.crocoGrid.scoord2z_r(zeta, alpha=0., beta=0.)
+                dims = self.croco.read_var_dim(self.variableName)
+                if "x_u" in dims:
+                    mask = self.croco.crocoGrid.umask()
+                    z = self.croco.crocoGrid.rho2u_3d(z)
+                elif "y_v" in dims:
+                    mask = self.croco.crocoGrid.vmask()
+                    z = self.croco.crocoGrid.rho2v_3d(z)
+                else:
+                    mask = self.croco.crocoGrid.maskr()
+                # Find level araound depth
+                maxlev = np.argmax(z[:,self.latPressIndex,self.lonPressIndex]>=depth)
+                minlev = maxlev-1
+                z1 = z[minlev,self.latPressIndex,self.lonPressIndex]
+                z2 = z[maxlev,self.latPressIndex,self.lonPressIndex]
+                # read variable and do interpolation
+                indices= "["+str(it)+","+str(minlev)+":"+str(maxlev+1)+","+lat+","+lon+"]"
+                var = self.croco.read_nc(self.variableName, indices=indices)
+                profile[it]=((var[0]-var[1])*depth+var[1]*z1-var[0]*z2)/(z1-z2) * \
+                            mask[self.latPressIndex,self.lonPressIndex]
+                title="{:s}, Lon={:4.1f}, Lat={:4.1f}, depth={:4.1f}".\
+                    format(self.variableName,self.lonPress,self.latPress,depth)
+
+        # draw curve
         self.profileFrame.drawCurv(profile,title=title)
 
     def onVerticalProfileBtn(self,event):

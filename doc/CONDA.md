@@ -6,22 +6,13 @@
 Miniconda installers contain the conda package manager and Python.
 Once miniconda is installed, you can use the conda command to install any other packages and create environments.
 
-After downloading `Miniconda3-latest-Linux-x86_64.sh` or `Miniconda3-latest-MacOSX-x86_64.sh` you need to run it with: `bash Miniconda3-latest-MacOSX-x86_64.sh`
+After downloading `Miniconda3-latest-Linux-x86_64.sh` or `Miniconda3-latest-MacOSX-x86_64.sh` you need to run it with: `sh Miniconda3-latest-MacOSX-x86_64.sh`
 
-Miniconda must be used with bash. If you want to use it with csh, add in your .cshrc (not ideal solution)
+Add in your .cshrc
 ```
-#
-#----------------------------------------------------------------
-# alias Miniconda
-#----------------------------------------------------------------
-#
-setenv PATH ${PATH}: /home/machine/username/miniconda3/bin
-alias source_activate 'setenv OLDPATH ${PATH};setenv PATH /home/machine/username/miniconda3/envs/\!*/bin:${PATH}'
-alias source_deactivate 'setenv PATH $OLDPATH'
+# Conda environment
+source /pathto/.miniconda/etc/profile.d/conda.csh
 ```
-where machine is the name of your computer and username is your username.
-
-
 ## Main commands:
 What version, update conda
 ```
@@ -32,13 +23,13 @@ Create new environment myenv
 ```
 conda create --name myenv python
 ```
-Switch to another environment (activate/deactivate) (or source_activate in csh)
+Switch to another environment
 ```
-source activate myenv
+conda activate myenv
 ```
 To change your path from the current environment back to the root (or source_deactivate in csh)
 ```
-source deactivate
+conda deactivate
 ```
 List all environments
 ```
@@ -62,7 +53,7 @@ conda install packagename
 ```
 Remove conda
 ```
-rm -rf /home/machine/username/miniconda3 
+rm -rf /pathto/miniconda3 
 ```
 where machine is the name of your computer and username is your username.
 
@@ -84,7 +75,8 @@ conda list
 ## Install a package with pip
 
 For packages that are not available from conda or Anaconda.org, we can often install the package with pip (short for “pip installs packages”).
-Exporting environment
+
+## Exporting environment
 
 ```
 conda env export > environment.yml on a machine
