@@ -22,7 +22,7 @@ class Croco(object):
         msg = '--- instantiating *%s*' % (crocofile)
         # print(bcolors.OKGREEN + msg + bcolors.ENDC)
         self.crocofile = crocofile
-        self.r_earth = 6371315. # Mean earth radius in metres (from scalars.h)
+        self.r_earth = 6371315. # Mean earth radius in metres
         
         # An index along either x or y dimension
         self.ij = None
@@ -30,7 +30,11 @@ class Croco(object):
         self.crocoGrid = CrocoGrid(self.crocofile)
 
         self.ListOfVariables = self.list_of_variables()
+        self.ListOfDerived = self.list_of_derived()
         self.times = self.read_nc( "time_instant") * second2day
+
+        self.rho0 = 1025.
+        self.g = 9.81
 
 
     def read_nc(self, varname, indices="[:]"):
@@ -155,6 +159,18 @@ class Croco(object):
                             keys.append(var)
             except:
                 time.sleep(0.5)
+        return keys
+
+
+    def list_of_derived(self):
+        '''
+        '''
+        crocofile = self.crocofile
+        if isinstance(crocofile, list):
+            crocofile = crocofile[0]
+        not_done = True
+        keys = []
+        keys.append('pv')
         return keys
 
     def get_run_name(self):
@@ -349,7 +365,149 @@ class Croco(object):
         return self
 
 
-####################################################################################
+    def get_pv(self,tindex,depth=None, minlev=None, maxlev=None):
+
+        if depth is None:
+            pv = np.zeros_like(self.crocoGrid.maskr())
+            pv = np.tile(pv,(maxlev-minlev,1,1))
+            pv[:] = np.nan
+            pv[:,1:-1,1:-1] = self.ertel(tindex,minlev=minlev,maxlev=maxlev)
+        elif depth > 0:
+            pv = np.zeros_like(self.crocoGrid.maskr())
+            pv[:] = np.nan
+            pv[1:-1,1:-1] = self.ertel(tindex,minlev=int(depth)-2,maxlev=int(depth-1)) 
+        else:
+            zeta = self.read_nc('ssh', indices= "["+str(tindex)+",:,:]")
+            z = self.crocoGrid.scoord2z_r(zeta, alpha=0., beta=0.)
+            minlev,maxlev = self.crocoGrid.zslice(None,self.crocoGrid.maskr(),z,depth,findlev=True)
+            pv = np.zeros_like(z[minlev:maxlev,:,:])
+            pv[:] = np.nan
+            pv[:,1:-1,1:-1] = self.ertel(tindex,minlev=minlev,maxlev=maxlev)
+        return pv
+
+
+    def ertel(self,tindex,minlev=None,maxlev=None):                  
+        #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        #
+        #   epv    - The ertel potential vorticity with respect to property 'lambda'
+        #
+        #                                       [ curl(u) + f ]
+        #   -  epv is given by:           EPV = --------------- . del(lambda)
+        #                                            rho
+        #
+        #   -  pvi,pvj,pvk - the x, y, and z components of the potential vorticity.
+        #
+        #   -  Ertel PV is calculated on horizontal rho-points, vertical w-points.
+        #
+        #
+        #   tindex   - The time index at which to calculate the potential vorticity.
+        #   depth    - depth 
+        #
+        # Adapted from rob hetland.
+        #
+        #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        #
+        #
+        # Grid parameters
+        #
+        pm = self.crocoGrid.pm()
+        pn = self.crocoGrid.pm()
+        f = self.crocoGrid.f()
+        rho0=self.rho0
+        #
+        # 3D variables
+        #
+        zeta = self.read_nc('ssh', indices= "["+str(tindex)+",:,:]")
+        dz = self.crocoGrid.scoord2dz(zeta, alpha=0., beta=0.)[minlev:maxlev+1,:,:]
+
+        u = self.read_nc('u', indices= "["+str(tindex)+","+str(minlev)+":"+str(maxlev+1)+",:,:]")
+        v = self.read_nc('v', indices= "["+str(tindex)+","+str(minlev)+":"+str(maxlev+1)+",:,:]")
+        try:
+            rho = self.read_nc('rho', indices= "["+str(tindex)+","+str(minlev)+":"+str(maxlev+1)+",:,:]")
+        except:
+            # t = self.read_nc('temp', indices= "["+tindex+","+vlevel+",:,:]")
+            # s = self.read_nc('selt', indices= "["+tindex+","+vlevel+",:,:]")
+            # rho = self.rho_eos(t,s,0)
+            print('rho not in history file')
+            return
+        #
+        #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        #  Ertel potential vorticity, term 1: [f + (dv/dx - du/dy)]*drho/dz
+        #
+        # Compute d(v)/d(xi) at PSI-points.
+        #
+        dy = 0.25 * (pm[:-1,1:]+pm[1:,1:]+pm[:-1,:-1]+pm[1:,:-1])
+        dvdxi = np.diff(v ,n=1,axis=2) / dy
+        #
+        #  Compute d(u)/d(eta) at PSI-points.
+        #
+        dy = 0.25 * (pn[:-1,1:]+pn[1:,1:]+pn[:-1,:-1]+pn[1:,:-1])
+        dudeta = np.diff(u ,n=1,axis=1) / dy
+        #
+        #  Compute Ertel potential vorticity <k hat> at horizontal RHO-points and
+        #  vertical W-points.
+        #
+        omega = dvdxi - dudeta
+        omega = 0.25 * (omega[:,:-1,1:]+omega[:,1:,1:]+omega[:,:-1,:-1]+omega[:,1:,:-1])
+
+        pvk = (f[1:-1,1:-1] + omega)
+        # dz = self.crocoGrid.scoord2dz(zeta, alpha=0., beta=0.)
+        dz_w = 0.5*(dz[:-1,1:-1,1:-1]+dz[1:,1:-1,1:-1])
+        pvk = np.diff(pvk,n=1,axis=0) / dz_w
+
+        #
+        #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        #  Ertel potential vorticity, term 2: (dv/dz)*(drho/dx)
+        #
+        #  Compute d(v)/d(z) at horizontal V-points and vertical W-points
+        #
+        dz_v = 0.5 * (dz[:,1:,:]+dz[:,:-1,:])
+        # dz_v = self.crocoGrid.scoord2dz_v(zeta, alpha=0., beta=0.)
+        dvdz = np.diff(v,axis=0)/(0.5*(dz_v[:-1,:,:]+dz_v[1:,:,:]))
+        #
+        #  Compute d(rho)/d(xi) at horizontal U-points and vertical RHO-points
+        #
+        dx = 0.5 * (pm[:,:-1]+pm[:,:-1])
+        drhodx = np.diff(rho,axis=2) / dx
+        #
+        #  Add in term 2 contribution to Ertel potential vorticity at horizontal RHO-points and
+        #  vertical W-points.
+        #
+        pvi = 0.5*(dvdz[:,:-1,1:-1]+dvdz[:,1:,1:-1]) * \
+              0.25*(drhodx[1:,1:-1,:-1]+drhodx[1:,1:-1,1:]+drhodx[:-1,1:-1,:-1]+drhodx[:-1,1:-1,1:])
+        #
+        #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        #  Ertel potential vorticity, term 3: (du/dz)*(drho/dy)
+        #
+        #  Compute d(u)/d(z) at horizontal U-points and vertical W-points
+        #
+        dz_u = 0.5 * (dz[:,:,1:]+dz[:,:,:-1])
+        # dz_u = self.crocoGrid.scoord2dz_u(zeta, alpha=0., beta=0.)
+        dudz = np.diff(u,axis=0)/(0.5*(dz_u[:-1,:,:]+dz_u[1:,:,:]))
+        #
+        #  Compute d(rho)/d(eta) at horizontal V-points and vertical RHO-points
+        #
+        dy = 0.5 * (pn[:-1,:]+pn[:-1,:])
+        drhodeta = np.diff(rho,axis=1) / dy
+        #
+        #  Add in term 3 contribution to Ertel potential vorticity at horizontal RHO-points and
+        #  vertical W-points..
+        #
+        pvj = 0.5*(dudz[:,1:-1,1:]+dudz[:,1:-1,:-1]) * \
+              0.25*(drhodeta[1:,:-1,1:-1]+drhodeta[1:,1:,1:-1]+drhodeta[:-1,:-1,1:-1]+drhodeta[:-1,1:,1:-1])
+        #
+        #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        # Sum potential vorticity components, and divide by rho0
+        #
+        pvi = -pvi/rho0
+        pvj =  pvj/rho0
+        pvk =  pvk/rho0
+        #
+        return(pvi + pvj + pvk)
+        #
+        #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+        ####################################################################################
 
 class CrocoGrid (Croco):
     '''
@@ -410,21 +568,21 @@ class CrocoGrid (Croco):
         '''
         Get mask at u, v, psi points
         '''
+
         try:
             self._umask = self.read_nc('mask_u')
         except:
-            #Mp, Lp = self.maskr().shape
-            #print 'Mp',Mp,'  Lp',Lp
-            #Mp -= 1
-            #Lp -= 1
-            #M = Mp - 1
-            #L = Lp - 1
             self._umask = self.maskr()[:, :-1] * self.maskr()[:, 1:]
             self._vmask = self.maskr()[:-1]   * self.maskr()[1:]
             self._pmask = self._umask[:-1] * self._umask[1:]
         else:
             self._vmask = self.read_nc('mask_v')
             self._pmask = self.read_nc('mask_psi')
+
+        # self._rmask = np.where(self._rmask==0.,np.nan,self._rmask)
+        self._umask = np.where(self._umask==0.,np.nan,self._umask)
+        self._vmask = np.where(self._vmask==0.,np.nan,self._vmask)
+        self._pmask = np.where(self._pmask==0.,np.nan,self._pmask)
         return self
 
 
@@ -636,90 +794,6 @@ class CrocoGrid (Croco):
 
 
 
-    # def get_depths(self,fname,tindex,type):
-
-    #     zeta=0.*self.h
-
-    #     # open history file
-    #     #
-    #     if os.path.isfile(fname):
-    #       nc=Dataset(fname, 'r')
-    #       ncvars = nc.variables.keys() 
-    #       if "zeta" in ncvars:
-    #         zeta=np.squeeze(nc.variables['zeta'][tindex,:,:])
-    #       nc.close()
-
-    #     vtype=type
-    #     if (type=='u')|(type=='v'):
-    #       vtype='r'
-    #     z=self.zlevs(zeta,vtype)
-    #     if type=='u':
-    #       z=rho2u_3d(z)
-    #     if type=='v':
-    #       z=rho2v_3d(z)
-    #     return z
-
-
-
-    # def zlevs(self,zeta=0,type='r'):
-    #   ################################################################
-    #   #
-    #   #  function z = zlevs(h,zeta,theta_s,theta_b,hc,N,type,vtransform)
-    #   #
-    #   #  this function compute the depth of rho or w points for ROMS
-    #   #
-    #   #  On Input:
-    #   #
-    #   #    type    'r': rho point 'w': w point 
-    #   #    vtransform  1=> old v transform (Song, 1994) 
-    #   #                2=> new v transform (Shcheptekin, 2006)
-    #   #  On Output:
-    #   #
-    #   #    z       Depths (m) of RHO- or W-points (3D matrix).
-    #   # 
-    #   ################################################################
-
-
-    #     #
-    #     # Create S-coordinate system: based on model topography h(i,j),
-    #     # fast-time-averaged free-surface field and vertical coordinate
-    #     # transformation metrics compute evolving depths of of the three-
-    #     # dimensional model grid. Also adjust zeta for dry cells.
-    #     # 
-    #     h=np.where(self.h == 0., 1.e-2, self.h)  
-    #     Dcrit=0.01   # min water depth in dry cells
-    #     mask = np.where(zeta<(Dcrit-h))
-    #     zeta[mask]=Dcrit-h[mask]
-    #     #
-    #     hinv=1./h
-    #     z=np.zeros((self.N,self.M,self.L))
-    #     # if self.Vtransform == 2 :
-    #     if type=='w':
-    #         cff1=np.squeeze(self.Cs_w)
-    #         cff2=self.sc_w+1
-    #         sc=self.sc_w
-    #     else:
-    #         cff1=np.squeeze(self.Cs_r)
-    #         cff2=self.sc_r+1
-    #         sc=self.sc_r
-    #     h2=(h+self.hc)
-    #     cff=np.squeeze(self.hc*sc)
-    #     h2inv=1./h2
-    #     for k in range(0,self.N):
-    #         z0=cff[k]+cff1[k]*h
-    #         z[k,:,:]=z0*h/(h2) + zeta*(1.+z0*h2inv)
-    #     # else:
-    #     #     cff1=self.Cs
-    #     #     cff2=self.sc+1
-    #     #     cff=self.hc*(self.sc-self.Cs)
-    #     #     cff2=self.sc+1
-    #     #     for k in range(0,self.N):
-    #     #         z0=cff[k]+cff1[k]*h
-    #     #         z[k,:,:]=z0+zeta*(1.+z0*hinv)
-
-
-    #     return z
-
     def zslice(self,var,mask,z,depth,findlev=False):
         """
         #
@@ -771,36 +845,36 @@ class CrocoGrid (Croco):
                 v1[j,i] = var[k+1,j,i]
                 v2[j,i] = var[k,j,i]
         zmask = np.where(z2>depth,np.nan,1)
-        vnew=zmask*(((v1-v2)*depth+v2*z1-v1*z2)/(z1-z2))
+        vnew=mask*zmask*(((v1-v2)*depth+v2*z1-v1*z2)/(z1-z2))
         return vnew,minlev,maxlev
 
 
-    def zslice2(self,var,mask,z,depth,findlev=False):
-        """
-        #
-        #
-        # This function interpolate a 3D variable on a horizontal level of constant
-        # depth with scipy interp1d
-        #
-        # On Input:  
-        # 
-        #    var     Variable to process (3D matrix).
-        #    z       Depths (m) of RHO- or W-points (3D matrix).
-        #    depth   Slice depth (scalar meters, negative).
-        # 
-        # On Output: 
-        #
-        #    vnew    Horizontal slice (2D matrix). 
-        #
-        #
-        """
-        [N,Mp,Lp]=z.shape
-        vnew = np.zeros_like(z[0,:,:])
+    # def zslice2(self,var,mask,z,depth,findlev=False):
+    #     """
+    #     #
+    #     #
+    #     # This function interpolate a 3D variable on a horizontal level of constant
+    #     # depth with scipy interp1d
+    #     #
+    #     # On Input:  
+    #     # 
+    #     #    var     Variable to process (3D matrix).
+    #     #    z       Depths (m) of RHO- or W-points (3D matrix).
+    #     #    depth   Slice depth (scalar meters, negative).
+    #     # 
+    #     # On Output: 
+    #     #
+    #     #    vnew    Horizontal slice (2D matrix). 
+    #     #
+    #     #
+    #     """
+    #     [N,Mp,Lp]=z.shape
+    #     vnew = np.zeros_like(z[0,:,:])
 
-        for j in range(Mp):
-            for i in range (Lp):
-                f = interpolate.interp1d(z[:,j,i], var[:,j,i],bounds_error=False)
-                vnew[j,i] = f([depth])
+    #     for j in range(Mp):
+    #         for i in range (Lp):
+    #             f = interpolate.interp1d(z[:,j,i], var[:,j,i],bounds_error=False)
+    #             vnew[j,i] = f([depth])
 
-        return vnew
+    #     return vnew
         

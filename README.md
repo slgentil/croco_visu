@@ -14,7 +14,7 @@ source /Users/slgentil/.miniconda2/etc/profile.d/conda.csh
 ## Installation environnement croco_visu
 ```
 conda update conda
-conda create -n croco_visu -c conda-forge python=2.7 wxpython xarray matplotlib netcdf4 scipy
+conda create -n croco_visu -c conda-forge python=2.7 wxpython xarray matplotlib netcdf4 scipy ffmpeg
 conda activate croco_visu
 ```
 
