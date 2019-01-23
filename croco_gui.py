@@ -13,8 +13,6 @@ import numpy.ma as ma
 import scipy.io
 import netCDF4 as netcdf
 import matplotlib.pyplot as plt
-# import matplotlib
-# matplotlib.use('Agg')
 from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigureCanvas
 from matplotlib.figure import Figure
 from matplotlib import colors
@@ -28,14 +26,8 @@ import numpy.ma as ma
 
 
 wildcard = "Netcdf Files (*.nc)|*.nc"
-# figsize = [10,9]
 figsize = [6,5]
 
-# begin wxGlade: dependencies
-# end wxGlade
-
-# begin wxGlade: extracode
-# end wxGlade
 
 ########################################################################
 
@@ -43,7 +35,7 @@ class SectionFrame(wx.Frame):
 
     def __init__(self,typSection="XY",croco=None):
 
-        """Constructor"""
+        """Class to plot longitude/latitude section"""
 
         wx.Frame.__init__(self, None, wx.ID_ANY, title='Section')
 
@@ -56,7 +48,6 @@ class SectionFrame(wx.Frame):
         self.canvas = FigureCanvas(self.panel, -1, self.figure)
         self.canvas.mpl_connect('button_press_event', self.onFigureClick)
         self.canvas.mpl_connect('button_release_event', self.onFigureRelease)
-        # self.canvas.mpl_connect('motion_notify_event', self.onFigureMotion)
 
         self.AnimationBtn = wx.Button(self.panel, wx.ID_ANY, "Animation")
         self.AnimationBtn.Bind(wx.EVT_BUTTON, self.onAnimationBtn)
@@ -115,6 +106,7 @@ class SectionFrame(wx.Frame):
         self.xRelease, self.yRelease = event.xdata, event.ydata
 
     def rect_select_callback(self, eclick, erelease):
+        ''' Function for ZoomIn button'''
         self.xPress, self.yPress = eclick.xdata, eclick.ydata
         self.xRelease, self.yRelease = erelease.xdata, erelease.ydata
         self.xlim = [min(self.xPress,self.xRelease),max(self.xPress,self.xRelease)]
@@ -122,6 +114,7 @@ class SectionFrame(wx.Frame):
         self.drawz(setlim=False)
 
     def onAnimationBtn(self,event):
+        ''' Function when Animation button is pressed'''
         printDir = self.croco.path_script+"/Figures_" + self.croco.get_run_name()+"/"
         if not os.path.isdir(printDir):
                 os.mkdir(printDir)
@@ -136,6 +129,7 @@ class SectionFrame(wx.Frame):
         anim.save(filename)
         
     def animate( self, i):
+        ''' Function done at each step of the animation'''
         self.timeIndex = i
         self.updateVariableZ(timeIndex=i, setlim=False)
 
@@ -158,6 +152,7 @@ class SectionFrame(wx.Frame):
         self.drawz(setlim=False)
 
     def onPrintBtn(self,event):
+        ''' Save the plot in a file croco_visu/Figures_.../title.png '''
         printDir = self.croco.path_script+"/Figures_" + self.croco.get_run_name()+"/"
         if not os.path.isdir(printDir):
                 os.mkdir(printDir)
@@ -179,6 +174,9 @@ class SectionFrame(wx.Frame):
         self.drawz(setlim=False)
 
     def updateVariableZ(self, timeIndex=None, setlim=True):
+        ''' Fill self.variableZ with the new data according modified parameters for the section '''
+
+        # Variable in croco file
         if self.variableName in self.croco.ListOfVariables: 
             if timeIndex is None:
                 timeIndex = self.timeIndex
@@ -187,26 +185,32 @@ class SectionFrame(wx.Frame):
             else:        
                 indices="["+str(timeIndex)+",:,"+str(self.latlonIndex)+",:]"
             self.variableZ = self.croco.read_nc(self.variableName, indices= indices)
+
+        # Derived variable
         elif self.variableName in self.croco.ListOfDerived:
-            if self.variableName ==  'pv':
-                pv = self.croco.get_pv(timeIndex, minlev=0, maxlev=self.croco.crocoGrid.N-1)
+            # if self.variableName ==  'pv':
+            if 'pv' in self.variableName:
+                pv = self.croco.get_pv(timeIndex, minlev=0, maxlev=self.croco.crocoGrid.N-1,typ=self.variableName)
                 if self.typSection=="YZ":
                     self.variableZ = pv[:,:,self.latlonIndex]
                 else:        
                     self.variableZ = pv[:,self.latlonIndex,:]
+        # Plot the section variable           
         self.time = self.croco.times[timeIndex]
-        # self.title = "{:s}, {:s}={:4.1f}, Time={:4.1f}".format(self.variableName,self.section,self.latlon,time)
         self.drawz(setlim=setlim)
 
     def drawz(self, setlim=True):
+        ''' draw the current self.variableZ variable '''
+
         self.figure.clf()
-        # self.canvas.Destroy()
-        # self.figure = Figure(figsize=(figsize[0],figsize[1]))
-        # self.canvas = FigureCanvas(self.panel, -1, self.figure)
+        # Prepare canvas to receive the mouse click 
         self.canvas.mpl_connect('button_press_event', self.onFigureClick)
         self.canvas.mpl_connect('button_release_event', self.onFigureRelease)
 
+        # Mask Nan values
         variableZ = ma.masked_invalid(self.variableZ)
+
+        # Calculate default parameters of the plot if necessary
         if setlim:
             self.clim = [np.min(variableZ),np.max(variableZ)]
             self.mincolor = np.min(variableZ)
@@ -215,7 +219,8 @@ class SectionFrame(wx.Frame):
             self.MaxColorTxt.SetValue('%.2E' % self.maxcolor)
             self.xlim = [np.min(self.x),np.max(self.x)]
             self.ylim = [np.min(self.y),np.max(self.y)]
-        # time = self.croco.times[self.timeIndex]
+
+        # Plot variableZ
         self.title = "{:s}, {:s}={:4.1f}, Time={:4.1f}".format(self.variableName,self.section,self.latlon,self.time)
         mypcolor(self,self.x,self.y,variableZ,\
                       title=self.title,\
@@ -236,7 +241,7 @@ class ProfileFrame(wx.Frame):
 
     def __init__(self, croco):
 
-        """Constructor"""
+        """ Class for Time Series and Vertical Porfile"""
 
         wx.Frame.__init__(self, None, wx.ID_ANY, title='Profile')
 
@@ -284,23 +289,21 @@ class ProfileFrame(wx.Frame):
         self.xRelease, self.yRelease = event.xdata, event.ydata
 
     def rect_select_callback(self, eclick, erelease):
+        ''' Function for selecting rectangle when zoom in '''
         self.xPress, self.yPress = eclick.xdata, eclick.ydata
         self.xRelease, self.yRelease = erelease.xdata, erelease.ydata
         self.xlim = [min(self.xPress,self.xRelease),max(self.xPress,self.xRelease)]
         self.ylim = [ min(self.yPress,self.yRelease),max(self.yPress,self.yRelease)]
-        # self.drawCurv(profile=self.profile,z=self.z,title=self.title,
-        #               ylabel=self.ylabel,setlim=False)
         self.drawCurv(setlim=False)
 
     def onZoomInBtn(self,event):
         self.figure.RS.set_active(True)
 
     def onZoomOutBtn(self,event):
-        # self.drawCurv(profile=self.profile,z=self.z,title=self.title,
-        #     ylabel=self.ylabel)
         self.drawCurv()
 
     def onPrintBtn(self,event):
+        ''' Save plot in croco_visu/Figures_.../title.png '''
         printDir = self.croco.path_script+"/Figures_" + self.croco.get_run_name()+"/"
         if not os.path.isdir(printDir):
                 os.mkdir(printDir)
@@ -308,18 +311,23 @@ class ProfileFrame(wx.Frame):
         self.figure.savefig(filename, dpi=self.figure.dpi)
 
     def drawCurv(self,profile=None,z=None,title=None,ylabel=None,setlim=True):
+        ''' draw the time series or vertical profile curve '''
         if profile is not None:
             self.profile = profile
             self.z = z
             self.title = title
             self.ylabel = ylabel
 
+        # Prepare the canvas to receive mouse click event
         self.canvas.mpl_connect('button_press_event', self.onFigureClick)
         self.canvas.mpl_connect('button_release_event', self.onFigureRelease)
+
+        # Set default parameters of the plot if needed
         if setlim:
                 self.xlim=None
                 self.ylim=None
 
+        # Draw the curve
         if self.z is not None:
             plotCurv(self,x=self.profile,y=self.z,title=self.title,ylabel=self.ylabel,
                      xlim=self.xlim, ylim=self.ylim)
@@ -333,6 +341,8 @@ class ProfileFrame(wx.Frame):
 ########################################################################
 
 class CrocoGui(wx.Frame):
+
+    ''' Class for the main window (ie horizontal slice) '''
 
     def __init__(self):
 
@@ -393,16 +403,9 @@ class CrocoGui(wx.Frame):
         self.VerticalProfileBtn = wx.Button(self.Panel, wx.ID_ANY, "Vertical Profile")
         self.VerticalProfileBtn.Bind(wx.EVT_BUTTON, self.onVerticalProfileBtn)
 
-
-        # self.PanelCanvas = wx.Panel(self.Panel, wx.ID_ANY)
         self.PanelCanvas = wx.Panel(self.Panel, -1)
         self.figure = Figure(figsize=(figsize[0],figsize[1]))
-        # self.figure.canvas.mpl_connect('button_press_event', self.onFigureClick)
         self.canvas = FigureCanvas(self.PanelCanvas, -1, self.figure)
-        # self.canvas.mpl_connect('button_press_event', self.onFigureClick)
-        # self.canvas.mpl_connect('button_release_event', self.onFigureRelease)
-        # self.axes = self.figure.add_axes([0,0,1,1])
-        # self.axes = self.figure.add_axes([0.1,0.1,0.9,0.9])
 
         self.AnimationBtn = wx.Button(self.Panel, wx.ID_ANY, "Animation")
         self.AnimationBtn.Bind(wx.EVT_BUTTON, self.onAnimationBtn)
@@ -508,27 +511,25 @@ class CrocoGui(wx.Frame):
         rightSizer.Add(colorSizer, 0, wx.ALL|wx.EXPAND, 5)
 
         topSizer.Add(leftSizer, 0,wx.ALL|wx.EXPAND, 5 )
-        # topSizer.Add(rightSizer, 0,wx.ALL|wx.EXPAND, 5 )
         topSizer.Add(rightSizer, 0,wx.EXPAND, 5 )
 
         self.Panel.SetSizer(topSizer)
         self.Panel.SetAutoLayout(True)
         topSizer.Fit(self)
 
-        # self.SetAutoLayout(True)
-        # self.SetSizer(topSizer)
 
         self.Layout()
 
 
     def onOpenFile(self, event):
         """
-        Create and show the Open FileDialog
+        Create and show the Open FileDialog to choose the croco file
         """
 
         # get path of current script croco_gui.py
         path_script = os.path.dirname(os.path.realpath(__file__))
 
+        # show the dialog box and retrieve the path of the file
         dlg = wx.FileDialog(
             self, message="Choose a file",
             defaultDir=self.currentDirectory, 
@@ -539,11 +540,14 @@ class CrocoGui(wx.Frame):
         if dlg.ShowModal() == wx.ID_OK:
             paths = dlg.GetPaths()
         dlg.Destroy()
+
+        # Create a instance of the Croco class
         self.croco = Croco(paths[0])
 
         # get path of current script croco_gui.py
         self.croco.path_script = path_script
 
+        # Fill the different parts of the main window from the croco instance
         self.OpenFileTxt.SetLabel(paths[0])       
         self.LabelMinMaxTime.SetLabel("Min/Max Time = "+str(self.croco.times[0])+" ... "+ \
                                       str(self.croco.times[self.croco.crocoGrid.ntimes-1])) 
@@ -587,6 +591,7 @@ class CrocoGui(wx.Frame):
         self.lonReleaseIndex,self.latReleaseIndex = self.findLatLonIndex(self.lonRelease, self.latRelease)
 
     def rect_select_callback(self, eclick, erelease):
+        ''' Function to select a rectangle when zoom in '''
         self.xPress, self.yPress = eclick.xdata, eclick.ydata
         self.xRelease, self.yRelease = erelease.xdata, erelease.ydata
         self.xlim = [min(self.xPress,self.xRelease),max(self.xPress,self.xRelease)]
@@ -627,7 +632,6 @@ class CrocoGui(wx.Frame):
         self.time = self.croco.times[self.timeIndex]
         self.TimeTxt.SetValue(str(self.time))
         self.updateVariableXY(setlim=False)
-
 
     def onTimePlusBtn(self,event):
         self.timeIndex = min(self.timeIndex + 1,self.croco.crocoGrid.ntimes - 1)
@@ -706,7 +710,6 @@ class CrocoGui(wx.Frame):
         self.latPressIndex,self.lonPressIndex = self.findLatLonIndex(self.lonPress, self.latPress) 
         self.drawz(typSection="XZ")
 
-
     # def onHovmullerBtn(self,event):
     #     print("Hovmuller")
 
@@ -731,7 +734,6 @@ class CrocoGui(wx.Frame):
                 os.mkdir(printDir)
         filename = printDir+self.title + ".mp4"
         os.system('rm -rf '+filename)
-        # self.clim = [np.min(self.variableXY),np.max(self.variableXY)]
         save_count = self.endTimeIndex - self.startTimeIndex + 1
         anim = animation.FuncAnimation(self.figure, self.animate, \
                    frames = range(self.startTimeIndex,self.endTimeIndex+1), repeat=False, \
@@ -740,6 +742,7 @@ class CrocoGui(wx.Frame):
         anim.save(filename)
 
     def animate( self, i):
+        ''' function applied at each time step of the animation '''
         self.timeIndex = i
         self.updateVariableXY(setlim=False)
 
@@ -764,9 +767,6 @@ class CrocoGui(wx.Frame):
 
     def onZoomInBtn(self,event):
         self.figure.RS.set_active(True)
-        # self.xlim = [min(self.lonPress,self.lonRelease),max(self.lonPress,self.lonRelease)]
-        # self.ylim = [ min(self.latPress,self.latRelease),max(self.latPress,self.latRelease)]
-        # self.drawxy()
 
     def onZoomOutBtn(self,event):
         self.xlim = [np.min(self.croco.crocoGrid._lon),np.max(self.croco.crocoGrid._lon)]
@@ -778,10 +778,10 @@ class CrocoGui(wx.Frame):
         if not os.path.isdir(printDir):
                 os.mkdir(printDir)
         filename = printDir+self.title + ".png"
-        # filename = printDir+self.variableName + ".png"
         self.figure.savefig(filename, dpi=self.figure.dpi)
 
     def updateVariableXY(self,setlim=True):
+        ''' Fill the variable self.variableXY with the rigth data'''
         time = str(self.timeIndex)        
         depth = float(self.LevelTxt.GetValue())
 
@@ -810,8 +810,9 @@ class CrocoGui(wx.Frame):
                         raise Exception
             elif self.variableName in self.croco.ListOfDerived:
                 # depth = float(self.LevelTxt.GetValue())
-                if self.variableName ==  'pv':
-                    self.variableXY = self.croco.get_pv(self.timeIndex, depth=depth)
+                # if self.variableName ==  'pv':
+                if 'pv' in self.variableName:
+                    self.variableXY = self.croco.get_pv(self.timeIndex, depth=depth,typ=self.variableName)
             else:
                 print("unknown variable ",self.variableName)
                 return
@@ -827,6 +828,7 @@ class CrocoGui(wx.Frame):
                 z = self.croco.crocoGrid.rho2v_3d(z)
             minlev,maxlev = self.croco.crocoGrid.zslice(None,self.croco.crocoGrid.maskr(),z,depth,findlev=True)
 
+            # Variable from croco file
             if self.variableName in self.croco.ListOfVariables:      
                 indices= "["+time+","+str(minlev)+":"+str(maxlev+1)+",:,:]"    
                 var = self.croco.read_nc(self.variableName, indices=indices)
@@ -836,45 +838,48 @@ class CrocoGui(wx.Frame):
                 except:
                     print("Not enough points")
                     pass
-        
+            
+            # Derived variableXY
             elif self.variableName in self.croco.ListOfDerived:
-                if self.variableName ==  'pv':
-                    pv = self.croco.get_pv(self.timeIndex, depth=depth, minlev=minlev, maxlev=maxlev)
+                # if self.variableName ==  'pv':
+                if 'pv' in self.variableName:
+                    pv = self.croco.get_pv(self.timeIndex, depth=depth, minlev=minlev, maxlev=maxlev,typ=self.variableName)
                     try:
                         self.variableXY = self.croco.crocoGrid.zslice(pv,mask,z[minlev:maxlev,:,:],depth)[0]
                     except:
                         print("Not enough points")
                         pass
+
+        # Draw the new self.variableXY                
         self.drawxy(setlim=setlim)
 
 
     def drawxy(self,setlim=True):
+        ''' Draw the current variable self.variableXY in the canvas of the main window '''
         self.figure.clf()
-        # self.canvas.Destroy()
-        # self.figure = Figure(figsize=(figsize[0],figsize[1]))
-        # self.canvas = FigureCanvas(self.PanelCanvas, -1, self.figure)
+
+        # Prepare the canvas to receive click events
         self.canvas.mpl_connect('button_press_event', self.onFigureClick)
         self.canvas.mpl_connect('button_release_event', self.onFigureRelease)
 
         variableXY = ma.masked_invalid(self.variableXY)
+        # Set default parameters of the plot if needed
         if setlim:
-            # self.clim = [np.min(self.variableXY),np.max(self.variableXY)]
             self.clim = [np.min(variableXY),np.max(variableXY)]
-            # self.mincolor = np.min(self.variableXY)
             self.mincolor = np.min(variableXY)
             self.MinColorTxt.SetValue('%.2E' % self.mincolor)
-            # self.maxcolor = np.max(self.variableXY)
             self.maxcolor = np.max(variableXY)
             self.MaxColorTxt.SetValue('%.2E' % self.maxcolor)
             self.xlim = [np.min(self.croco.crocoGrid._lon),np.max(self.croco.crocoGrid._lon)]
             self.ylim = [np.min(self.croco.crocoGrid._lat),np.max(self.croco.crocoGrid._lat)]
 
         depth = float(self.LevelTxt.GetValue())
+        # Level pyplot
         if depth > 0:
             self.title = "{:s}, Level={:4d}, Time={:4.1f}".format(self.variableName,self.levelIndex+1,self.croco.times[self.timeIndex])
+        # Depth plot
         else:
             self.title = "{:s}, Depth={:4.1f}, Time={:4.1f}".format(self.variableName,depth,self.croco.times[self.timeIndex])
-        # mypcolor(self,self.croco.crocoGrid._lon,self.croco.crocoGrid._lat,self.variableXY,\
         mypcolor(self,self.croco.crocoGrid._lon,self.croco.crocoGrid._lat,variableXY,\
                       title=self.title,\
                       xlabel='Longitude',\
@@ -888,13 +893,14 @@ class CrocoGui(wx.Frame):
         self.Refresh()
 
     def drawz(self,typSection=None):
-
+        ''' Create a section window if needed and prepare the of the plot the section '''
         time = str(self.timeIndex)
         lon = str(self.lonPressIndex)
         lat = str(self.latPressIndex)
         zeta = self.croco.read_nc('ssh', indices= "["+time+",:,:]")
 
         if typSection == "XZ":
+            # Create the window if needed
             try:
                 self.sectionXZ.IsShown()
             except:
@@ -906,14 +912,18 @@ class CrocoGui(wx.Frame):
             section.latlonIndex = self.latPressIndex
             section.x = repmat(self.croco.crocoGrid._lon[self.latPressIndex,:].squeeze(),self.croco.crocoGrid.N,1)
             section.y = self.croco.crocoGrid.scoord2z_r(zeta, alpha=0., beta=0)[:,self.latPressIndex,:]
+            # Variable from croco file
             if self.variableName in self.croco.ListOfVariables:   
                 section.variableZ = self.croco.read_nc(self.variableName, indices= "["+time+",:,"+lat+",:]")
+            # Derived Variable
             elif self.variableName in self.croco.ListOfDerived:
-                if self.variableName ==  'pv':
-                    pv = self.croco.get_pv(self.timeIndex, minlev=0, maxlev=self.croco.crocoGrid.N-1)
+                # if self.variableName ==  'pv':
+                if 'pv' in self.variableName:
+                    pv = self.croco.get_pv(self.timeIndex, minlev=0, maxlev=self.croco.crocoGrid.N-1,typ=self.variableName)
                     section.variableZ = pv[:,self.latPressIndex,:]
 
         elif typSection == "YZ":
+            # Create the window if needed
             try:
                 self.sectionYZ.IsShown()
             except:
@@ -925,12 +935,14 @@ class CrocoGui(wx.Frame):
             section.latlonIndex = self.lonPressIndex        
             section.x = repmat(self.croco.crocoGrid._lat[:,self.lonPressIndex].squeeze(),self.croco.crocoGrid.N,1)
             section.y = self.croco.crocoGrid.scoord2z_r(zeta, alpha=0., beta=0)[:,:,self.lonPressIndex]
-            # section.variableZ = self.croco.read_nc(self.variableName, indices= "["+time+",:,:,"+lon+"]")
+            # Variable from croco file
             if self.variableName in self.croco.ListOfVariables:   
                 section.variableZ = self.croco.read_nc(self.variableName, indices= "["+time+",:,:,"+lon+"]")
+            # Derived Variable
             elif self.variableName in self.croco.ListOfDerived:
-                if self.variableName ==  'pv':
-                    pv = self.croco.get_pv(self.timeIndex, minlev=0, maxlev=self.croco.crocoGrid.N-1)
+                # if self.variableName ==  'pv':
+                if 'pv' in self.variableName:
+                    pv = self.croco.get_pv(self.timeIndex, minlev=0, maxlev=self.croco.crocoGrid.N-1,typ=self.variableName)
                     section.variableZ = pv[:,:,self.lonPressIndex]
         else:
             print("drawz: unknown type section: ",typSection)
@@ -948,6 +960,7 @@ class CrocoGui(wx.Frame):
         section.drawz()
 
     def getTimeSeries(self,profTyp=None):
+        ''' Fill the profile variable of the time series'''
         lat = str(self.latPressIndex)
         lon = str(self.lonPressIndex)
         # timestr = str(self.timeIndex)
@@ -981,8 +994,9 @@ class CrocoGui(wx.Frame):
                 level = int(depth)
                 profile = np.zeros_like(self.croco.times)
                 for it in range(len(self.croco.times)):
-                    if self.variableName ==  'pv':
-                        profile[it] = self.croco.get_pv(it, depth=level)[self.latPressIndex,self.lonPressIndex]
+                    # if self.variableName ==  'pv':
+                    if 'pv' in self.variableName:
+                        profile[it] = self.croco.get_pv(it, depth=level,typ=self.variableName)[self.latPressIndex,self.lonPressIndex]
 
             else:
                 print("unknown variable ",self.variableName)
@@ -1018,8 +1032,9 @@ class CrocoGui(wx.Frame):
             
                 elif self.variableName in self.croco.ListOfDerived:
                     minlev,maxlev = self.croco.crocoGrid.zslice(None,mask,z,depth,findlev=True)
-                    if self.variableName ==  'pv':
-                        pv = self.croco.get_pv(it, depth=depth, minlev=minlev, maxlev=maxlev)
+                    # if self.variableName ==  'pv':
+                    if 'pv' in self.variableName:
+                        pv = self.croco.get_pv(it, depth=depth, minlev=minlev, maxlev=maxlev,typ=self.variableName)
                         try:
                             pvz = self.croco.crocoGrid.zslice(pv,mask,z[minlev:maxlev,:,:],depth)[0]
                         except:
@@ -1037,6 +1052,7 @@ class CrocoGui(wx.Frame):
 
 
     def getVertProfile(self):
+        ''' Fill the profile variable for the vertical profile'''
         time = str(self.timeIndex)
         lat = str(self.latPressIndex)
         lon = str(self.lonPressIndex)
@@ -1050,9 +1066,10 @@ class CrocoGui(wx.Frame):
             profile = self.croco.read_nc(self.variableName, indices= "["+time+",:,"+lat+","+lon+"]")
 
         elif self.variableName in self.croco.ListOfDerived:
-            if self.variableName ==  'pv':
+            # if self.variableName ==  'pv':
+            if 'pv' in self.variableName:
                 profile = np.full_like(z, np.nan)
-                pv = self.croco.get_pv(self.timeIndex, minlev=0, maxlev=self.croco.crocoGrid.N-1)
+                pv = self.croco.get_pv(self.timeIndex, minlev=0, maxlev=self.croco.crocoGrid.N-1,typ=self.variableName)
                 profile[1:] = pv[:,self.latPressIndex,self.lonPressIndex]
         else:
             print("unknown variable ",self.variableName)

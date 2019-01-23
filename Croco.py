@@ -170,7 +170,8 @@ class Croco(object):
             crocofile = crocofile[0]
         not_done = True
         keys = []
-        keys.append('pv')
+        keys.append('pv_ijk')
+        keys.append('pv_k')
         return keys
 
     def get_run_name(self):
@@ -314,79 +315,25 @@ class Croco(object):
         assert v_in.ndim == 3, 'v_in must be 3d'
         return levloop(v_in)
 
-
-    def rotate(self, u_in, v_in, **kwargs):
-        """
-        Rotate velocity vectors
-        'angle' from gridfile
-        """
-        if kwargs.has_key('ob'):
-            if kwargs['ob'] in 'east':
-                angle = self.angle()[:,-1]
-            elif kwargs['ob'] in 'west':
-                angle = self.angle()[:,0]
-            elif kwargs['ob'] in 'north':
-                angle = self.angle()[-1]
-            elif kwargs['ob'] in 'south':
-                angle = self.angle()[0]
-            else:
-                raise Exception
-        else:
-            angle = self.angle()
-        cosa = np.cos(kwargs['sign'] * angle)
-        sina = np.sin(kwargs['sign'] * angle)
-        u_out = (u_in * cosa) + (v_in * sina)
-        v_out = (v_in * cosa) - (u_in * sina)
-        return u_out, v_out
-
-
-    def _get_barotropic_velocity(self, baroclinic_velocity, cell_depths):
-        '''
-        '''
-        sum_baroclinic = (baroclinic_velocity * cell_depths).sum(axis=0)
-        total_depth = cell_depths.sum(axis=0)
-        sum_baroclinic /= total_depth
-        return sum_baroclinic
-
-    def get_barotropic_velocity(self, baroclinic_velocity, cell_depths):
-        '''
-        Input:
-          baroclinic_velocity
-          cell_depths
-        '''
-        return self._get_barotropic_velocity(baroclinic_velocity, cell_depths)
-
-
-    def set_barotropic(self): #, open_boundary):
-        '''
-        '''
-        self.barotropic = self._get_barotropic_velocity(self.dataout,
-                                                        self.romsgrd.scoord2dz())
-        return self
-
-
-    def get_pv(self,tindex,depth=None, minlev=None, maxlev=None):
+    def get_pv(self,tindex,depth=None, minlev=None, maxlev=None, typ='ijk'):
 
         if depth is None:
-            pv = np.zeros_like(self.crocoGrid.maskr())
+            pv = np.full_like(self.crocoGrid.maskr(),np.nan)
             pv = np.tile(pv,(maxlev-minlev,1,1))
-            pv[:] = np.nan
-            pv[:,1:-1,1:-1] = self.ertel(tindex,minlev=minlev,maxlev=maxlev)
+            pv[:,1:-1,1:-1] = self.ertel(tindex,minlev=minlev,maxlev=maxlev,typ=typ)
         elif depth > 0:
-            pv = np.zeros_like(self.crocoGrid.maskr())
-            pv[:] = np.nan
-            pv[1:-1,1:-1] = self.ertel(tindex,minlev=int(depth)-2,maxlev=int(depth-1)) 
+            pv = np.full_like(self.crocoGrid.maskr(),np.nan)
+            pv[1:-1,1:-1] = self.ertel(tindex,minlev=int(depth)-2,maxlev=int(depth-1),typ=typ) 
         else:
             zeta = self.read_nc('ssh', indices= "["+str(tindex)+",:,:]")
             z = self.crocoGrid.scoord2z_r(zeta, alpha=0., beta=0.)
             minlev,maxlev = self.crocoGrid.zslice(None,self.crocoGrid.maskr(),z,depth,findlev=True)
-            pv = np.zeros_like(z[minlev:maxlev,:,:])
-            pv[:] = np.nan
-            pv[:,1:-1,1:-1] = self.ertel(tindex,minlev=minlev,maxlev=maxlev)
+            pv = np.full_like(z[minlev:maxlev,:,:],np.nan)
+            pv[:,1:-1,1:-1] = self.ertel(tindex,minlev=minlev,maxlev=maxlev,typ=typ)
         return pv
 
 
-    def ertel(self,tindex,minlev=None,maxlev=None):                  
+    def ertel(self,tindex, minlev=None, maxlev=None, typ='ijk'):                  
         #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         #
         #   epv    - The ertel potential vorticity with respect to property 'lambda'
@@ -430,71 +377,83 @@ class Croco(object):
             # rho = self.rho_eos(t,s,0)
             print('rho not in history file')
             return
-        #
-        #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        #  Ertel potential vorticity, term 1: [f + (dv/dx - du/dy)]*drho/dz
-        #
-        # Compute d(v)/d(xi) at PSI-points.
-        #
-        dy = 0.25 * (pm[:-1,1:]+pm[1:,1:]+pm[:-1,:-1]+pm[1:,:-1])
-        dvdxi = np.diff(v ,n=1,axis=2) / dy
-        #
-        #  Compute d(u)/d(eta) at PSI-points.
-        #
-        dy = 0.25 * (pn[:-1,1:]+pn[1:,1:]+pn[:-1,:-1]+pn[1:,:-1])
-        dudeta = np.diff(u ,n=1,axis=1) / dy
-        #
-        #  Compute Ertel potential vorticity <k hat> at horizontal RHO-points and
-        #  vertical W-points.
-        #
-        omega = dvdxi - dudeta
-        omega = 0.25 * (omega[:,:-1,1:]+omega[:,1:,1:]+omega[:,:-1,:-1]+omega[:,1:,:-1])
+        
+        if 'k' in typ:
+            #
+            #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+            #  Ertel potential vorticity, term 1: [f + (dv/dx - du/dy)]*drho/dz
+            #
+            # Compute d(v)/d(xi) at PSI-points.
+            #
+            dy = 0.25 * (pm[:-1,1:]+pm[1:,1:]+pm[:-1,:-1]+pm[1:,:-1])
+            dvdxi = np.diff(v ,n=1,axis=2) / dy
+            #
+            #  Compute d(u)/d(eta) at PSI-points.
+            #
+            dy = 0.25 * (pn[:-1,1:]+pn[1:,1:]+pn[:-1,:-1]+pn[1:,:-1])
+            dudeta = np.diff(u ,n=1,axis=1) / dy
+            #
+            #  Compute Ertel potential vorticity <k hat> at horizontal RHO-points and
+            #  vertical W-points.
+            #
+            omega = dvdxi - dudeta
+            omega = 0.25 * (omega[:,:-1,1:]+omega[:,1:,1:]+omega[:,:-1,:-1]+omega[:,1:,:-1])
 
-        pvk = (f[1:-1,1:-1] + omega)
-        # dz = self.crocoGrid.scoord2dz(zeta, alpha=0., beta=0.)
-        dz_w = 0.5*(dz[:-1,1:-1,1:-1]+dz[1:,1:-1,1:-1])
-        pvk = np.diff(pvk,n=1,axis=0) / dz_w
+            pvk = (f[1:-1,1:-1] + omega)
+            # dz = self.crocoGrid.scoord2dz(zeta, alpha=0., beta=0.)
+            dz_w = 0.5*(dz[:-1,1:-1,1:-1]+dz[1:,1:-1,1:-1])
+            pvk = np.diff(pvk,n=1,axis=0) / dz_w
+        else:
+            pvk = 0.
 
-        #
-        #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        #  Ertel potential vorticity, term 2: (dv/dz)*(drho/dx)
-        #
-        #  Compute d(v)/d(z) at horizontal V-points and vertical W-points
-        #
-        dz_v = 0.5 * (dz[:,1:,:]+dz[:,:-1,:])
-        # dz_v = self.crocoGrid.scoord2dz_v(zeta, alpha=0., beta=0.)
-        dvdz = np.diff(v,axis=0)/(0.5*(dz_v[:-1,:,:]+dz_v[1:,:,:]))
-        #
-        #  Compute d(rho)/d(xi) at horizontal U-points and vertical RHO-points
-        #
-        dx = 0.5 * (pm[:,:-1]+pm[:,:-1])
-        drhodx = np.diff(rho,axis=2) / dx
-        #
-        #  Add in term 2 contribution to Ertel potential vorticity at horizontal RHO-points and
-        #  vertical W-points.
-        #
-        pvi = 0.5*(dvdz[:,:-1,1:-1]+dvdz[:,1:,1:-1]) * \
-              0.25*(drhodx[1:,1:-1,:-1]+drhodx[1:,1:-1,1:]+drhodx[:-1,1:-1,:-1]+drhodx[:-1,1:-1,1:])
-        #
-        #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        #  Ertel potential vorticity, term 3: (du/dz)*(drho/dy)
-        #
-        #  Compute d(u)/d(z) at horizontal U-points and vertical W-points
-        #
-        dz_u = 0.5 * (dz[:,:,1:]+dz[:,:,:-1])
-        # dz_u = self.crocoGrid.scoord2dz_u(zeta, alpha=0., beta=0.)
-        dudz = np.diff(u,axis=0)/(0.5*(dz_u[:-1,:,:]+dz_u[1:,:,:]))
-        #
-        #  Compute d(rho)/d(eta) at horizontal V-points and vertical RHO-points
-        #
-        dy = 0.5 * (pn[:-1,:]+pn[:-1,:])
-        drhodeta = np.diff(rho,axis=1) / dy
-        #
-        #  Add in term 3 contribution to Ertel potential vorticity at horizontal RHO-points and
-        #  vertical W-points..
-        #
-        pvj = 0.5*(dudz[:,1:-1,1:]+dudz[:,1:-1,:-1]) * \
-              0.25*(drhodeta[1:,:-1,1:-1]+drhodeta[1:,1:,1:-1]+drhodeta[:-1,:-1,1:-1]+drhodeta[:-1,1:,1:-1])
+        if 'i' in typ:
+            #
+            #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+            #  Ertel potential vorticity, term 2: (dv/dz)*(drho/dx)
+            #
+            #  Compute d(v)/d(z) at horizontal V-points and vertical W-points
+            #
+            dz_v = 0.5 * (dz[:,1:,:]+dz[:,:-1,:])
+            # dz_v = self.crocoGrid.scoord2dz_v(zeta, alpha=0., beta=0.)
+            dvdz = np.diff(v,axis=0)/(0.5*(dz_v[:-1,:,:]+dz_v[1:,:,:]))
+            #
+            #  Compute d(rho)/d(xi) at horizontal U-points and vertical RHO-points
+            #
+            dx = 0.5 * (pm[:,:-1]+pm[:,:-1])
+            drhodx = np.diff(rho,axis=2) / dx
+            #
+            #  Add in term 2 contribution to Ertel potential vorticity at horizontal RHO-points and
+            #  vertical W-points.
+            #
+            pvi = 0.5*(dvdz[:,:-1,1:-1]+dvdz[:,1:,1:-1]) * \
+                  0.25*(drhodx[1:,1:-1,:-1]+drhodx[1:,1:-1,1:]+drhodx[:-1,1:-1,:-1]+drhodx[:-1,1:-1,1:])
+        else:
+            pvi = 0.
+
+        if 'j' in typ:
+            #
+            #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+            #  Ertel potential vorticity, term 3: (du/dz)*(drho/dy)
+            #
+            #  Compute d(u)/d(z) at horizontal U-points and vertical W-points
+            #
+            dz_u = 0.5 * (dz[:,:,1:]+dz[:,:,:-1])
+            # dz_u = self.crocoGrid.scoord2dz_u(zeta, alpha=0., beta=0.)
+            dudz = np.diff(u,axis=0)/(0.5*(dz_u[:-1,:,:]+dz_u[1:,:,:]))
+            #
+            #  Compute d(rho)/d(eta) at horizontal V-points and vertical RHO-points
+            #
+            dy = 0.5 * (pn[:-1,:]+pn[:-1,:])
+            drhodeta = np.diff(rho,axis=1) / dy
+            #
+            #  Add in term 3 contribution to Ertel potential vorticity at horizontal RHO-points and
+            #  vertical W-points..
+            #
+            pvj = 0.5*(dudz[:,1:-1,1:]+dudz[:,1:-1,:-1]) * \
+                  0.25*(drhodeta[1:,:-1,1:-1]+drhodeta[1:,1:,1:-1]+drhodeta[:-1,:-1,1:-1]+drhodeta[:-1,1:,1:-1])
+        else:
+            pvj = 0.
+
         #
         #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         # Sum potential vorticity components, and divide by rho0
@@ -762,13 +721,6 @@ class CrocoGrid (Croco):
         S-coordinate stretching curves at w points
         '''
         return self._scoord2z('w', zeta=zeta, alpha=alpha, beta=beta)[1]
-
-    def _set_dz_rho_points(self, zeta=0., alpha=0., beta=1):
-        """
-        Set depths of sigma layers at rho points, 3d matrix.
-        """
-        dz = self._scoord2z('w', zeta=zeta, alpha=alpha, beta=beta)[0]
-        self._dz_rho_points = dz[1:] - dz[:-1]
 
 
     def scoord2dz(self, zeta=0., alpha=0., beta=1.):
