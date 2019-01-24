@@ -51,7 +51,10 @@ def return_xarray_dataarray(ds,varname,chunks=None,**extra_kwargs):
     da : xarray.DataArray
     """
     # ds = return_xarray_dataset(filename,chunks=chunks)
-    dataarray = ds[varname]
+    try:
+        dataarray = ds[varname]
+    except:
+        dataarray = ds.attrs[varname]
     for kwargs in extra_kwargs:
         dataarray.attrs[kwargs] = extra_kwargs[kwargs]
     return dataarray

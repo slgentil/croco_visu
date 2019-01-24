@@ -37,6 +37,9 @@ def plotCurv(frame,x=None,y=None,xlabel=None,ylabel=None,legend=None, title = No
                                interactive=True)	
 	fig.RS.set_active(False)
 
+	xm = ma.masked_invalid(x)
+	ym = ma.masked_invalid(y)
+
 	# axes = self.axes
 	if xlim:
 		axes.set_xlim((xlim[0],xlim[1]))
@@ -45,21 +48,21 @@ def plotCurv(frame,x=None,y=None,xlabel=None,ylabel=None,legend=None, title = No
 
 	if y is None:
 		if legend is None:
-			axes.plot(x, linewidth=2.0)
+			axes.plot(xm, linewidth=2.0)
 		else:
-			axes.plot(x, label=legend, linewidth=2.0)
+			axes.plot(xm, label=legend, linewidth=2.0)
 	elif y.ndim == 1:
 	    if legend is None:
-	        axes.plot(x, y, linewidth=2.0)
+	        axes.plot(xm, ym, linewidth=2.0)
 	    else:
-	        axes.plot(x, y, label=legend, linewidth=2.0)
+	        axes.plot(xm, ym, label=legend, linewidth=2.0)
 	else:
-	    NbCurv = y.shape[1]
+	    NbCurv = ym.shape[1]
 	    for i in range(0,NbCurv):
 	        if legend is None:
-	            axes.plot(x, y[:,i], linewidth=2.0)
+	            axes.plot(xm, ym[:,i], linewidth=2.0)
 	        else:
-	            axes.plot(x, y[:,i], label=legend[i], linewidth=2.0)
+	            axes.plot(xm, ym[:,i], label=legend[i], linewidth=2.0)
 
 	axes.figure.set_facecolor('white')
 	axes.grid('on')

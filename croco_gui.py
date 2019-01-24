@@ -917,7 +917,6 @@ class CrocoGui(wx.Frame):
                 section.variableZ = self.croco.read_nc(self.variableName, indices= "["+time+",:,"+lat+",:]")
             # Derived Variable
             elif self.variableName in self.croco.ListOfDerived:
-                # if self.variableName ==  'pv':
                 if 'pv' in self.variableName:
                     pv = self.croco.get_pv(self.timeIndex, minlev=0, maxlev=self.croco.crocoGrid.N-1,typ=self.variableName)
                     section.variableZ = pv[:,self.latPressIndex,:]

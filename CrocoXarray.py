@@ -8,28 +8,24 @@ import sys
 import re
 import wx
 import numpy as np
+import xarray as xr
 import netCDF4 as netcdf
 from croco_wrapper import CrocoWrapper
+# from croco_xios_wrapper import CrocoWrapper
 from io_xarray import return_xarray_dataarray, return_xarray_dataset
 
 second2day = 1. /86400.
 
 class Croco(object):
     '''
-    Croco class
+    Croco class grouping all the methods relative to the variables
     '''
     def __init__(self):
         '''
         Initialise the Croco object
         '''
-        # msg = '--- instantiating *%s*' % (crocofile)
-        # print(bcolors.OKGREEN + msg + bcolors.ENDC)
-        # self.crocofile = crocofile
+
         self.wrapper = CrocoWrapper()
-        	# coordinate_file=crocofile, \
-         #    metrics_file=crocofile, \
-         #    mask_file=crocofile, \
-         #    variable_file=crocofile)
 
         self.r_earth = 6371315. # Mean earth radius in metres (from scalars.h)
         
@@ -37,9 +33,10 @@ class Croco(object):
         self.ij = None
 
         self.ListOfVariables = self.list_of_variables()
-        # self.times = self.read_nc( "time_instant") * second2day
+        self.ListOfDerived = self.list_of_derived()
 
-
+        self.rho0 = 1025.
+        self.g = 9.81
 
     def list_of_variables(self):
         '''
@@ -57,6 +54,13 @@ class Croco(object):
             if ('t' in ds[key].dims and len(ds[key].dims)>2):
                 self.variables[key] = ds[key]
                 keys.append(key)
+        return keys
+
+    def list_of_derived(self):
+        ''' List of calculated variables implemented '''
+        keys = []
+        keys.append('pv_ijk')
+        keys.append('pv_k')
         return keys
 
     def get_variable(self,variableName, tindex=None, xindex=None, yindex=None, zindex=None):
@@ -120,407 +124,217 @@ class Croco(object):
 
     def get_coord(self,variableName, direction=None):
         """
-        get coordinate corresponding to the variable depending on the direction
+        get coordinate corresponding of the variable depending on the direction
         direction : 'x', 'y', 't'
         """
-        list = self.variables[variableName].coords
+        # If variable is derived variable, return rho point coordinates
+        try:
+            list = self.variables[variableName].dims
+        except:
+            try:
+                list = self.variables['rho'].dims
+            except:
+                list = self.variables['temp'].dims
         if direction == 'x':
-            regex=re.compile(".*(lon_).*")
+            regex=re.compile(".*(x_).*")
             coord = [m.group(0) for l in list for m in [regex.search(l)] if m]
             if coord[0].find('u') >=0 :
-                return  self.wrapper.coords['lon_u'].values
+                return  self.wrapper.coords['lon_u']
             elif coord[0].find('v') >=0 :
-                return  self.wrapper.coords['lon_v'].values
+                return  self.wrapper.coords['lon_v']
             elif coord[0].find('r') >=0 :
-                return  self.wrapper.coords['lon_r'].values
+                return  self.wrapper.coords['lon_r']
             elif coord[0].find('w') >=0 :
-                return  self.wrapper.coords['lon_w'].values
+                return  self.wrapper.coords['lon_w']
         if direction == 'y':
-            regex=re.compile(".*(lat_).*")
+            regex=re.compile(".*(y_).*")
             coord = [m.group(0) for l in list for m in [regex.search(l)] if m]
             if coord[0].find('u') >=0 :
-                return  self.wrapper.coords['lat_u'].values
+                return  self.wrapper.coords['lat_u']
             elif coord[0].find('v') >=0 :
-                return  self.wrapper.coords['lat_v'].values
+                return  self.wrapper.coords['lat_v']
             elif coord[0].find('r') >=0 :
-                return  self.wrapper.coords['lat_r'].values
+                return  self.wrapper.coords['lat_r']
             elif coord[0].find('w') >=0 :
-                return  self.wrapper.coords['lat_w'].values
+                return  self.wrapper.coords['lat_w']
         if direction == 't':
             return  self.wrapper.coords['time'].values
 
+    def create_DataArray(self, data=None, dimstyp='xyzt'):
+        ''' 
+        Create a xarrayr DataArray avec les dimensions possible x,y,z et t.
+        Par defaut la variable est au point rho.
+        '''
 
+        # Create dims
+        dims=[]
+        # dims = ('t', 'z_r', 'y_r', 'x_r')
+        if 't' in dimstyp: dims.append('t')
+        if 'z' in dimstyp: dims.append('z_r')
+        if 'y' in dimstyp: dims.append('y_r')
+        if 'x' in dimstyp: dims.append('x_r')
 
-# ####################################################################################
-
-# class CrocoGrid (Croco):
-#     '''
-#     CrocoGrid class (inherits from Croco class)
-#     '''
-#     def __init__(self, crocofile):
-#         '''
-
-#         '''
-#         # super(CrocoGrid, self).__init__(filename)
-#         self.indices = '[self.j0:self.j1, self.i0:self.i1]'
-#         self.i0 = 0
-#         self.i1 = None
-#         self.j0 = 0
-#         self.j1 = None
-#         self.k = 0 # to be used as a z index
-#         self.t = 0 # to be used as a time index
-#         self.crocofile = crocofile
-#         with netcdf.Dataset(self.crocofile) as nc:
-# 	        self._lon = self.read_nc('nav_lon_rho')#, indices=self.indices)
-# 	        self._lat =  self.read_nc('nav_lat_rho')#, indices=self.indices)
-# 	        self._pm = self.read_nc('pm')#, indices=self.indices)
-# 	        self._pn = self.read_nc('pn')#, indices=self.indices)
-# 	        self._maskr = self.read_nc('mask_rho')#, indices=self.indices)
-# 	        self._angle = self.read_nc('angle')#, indices=self.indices)
-# 	        self._h = self.read_nc('h')#, indices=self.indices)
-# 	        # self._hraw = self.read_nc('hraw')#, indices=self.indices)
-# 	        self._f = self.read_nc('f')#, indices=self.indices)
-# 	        self._uvpmask()
-# 	        self.theta_s = self.read_nc('theta_s')
-# 	        self.theta_b = self.read_nc('theta_b')
-# 	        self.hc = self.read_nc('hc')
-# 	        self.L = self.read_dim_size("x_rho")
-# 	        self.M = self.read_dim_size("y_rho")
-# 	        self.N = self.read_dim_size("s_rho")
-# 	        self.ntimes = self.read_dim_size("time_counter")
-# 	        self.sc_r = self.read_nc('sc_r')
-
-
-#     def lon(self):   return self._lon[self.j0:self.j1, self.i0:self.i1]
-#     def lat(self):   return self._lat[self.j0:self.j1, self.i0:self.i1]
-#     def pm(self):    return self._pm[self.j0:self.j1, self.i0:self.i1]
-#     def pn(self):    return self._pn[self.j0:self.j1, self.i0:self.i1]
-#     def maskr(self): return self._maskr[self.j0:self.j1, self.i0:self.i1]
-#     def angle(self): return self._angle[self.j0:self.j1, self.i0:self.i1]
-#     def h(self):     return self._h[self.j0:self.j1, self.i0:self.i1]
-#     def hraw(self):  return self._hraw[self.j0:self.j1, self.i0:self.i1]
-#     def f(self):     return self._f[self.j0:self.j1, self.i0:self.i1]
-
-#     def idata(self):
-#         return np.nonzero(self.maskr().ravel() == 1.)[0]
-
-#     def imask(self):
-#         return np.nonzero(self.maskr().ravel() == 0.)[0]
-
-
-#     def _uvpmask(self):
-#         '''
-#         Get mask at u, v, psi points
-#         '''
-#         try:
-#             self._umask = self.read_nc('mask_u')
-#         except:
-#             #Mp, Lp = self.maskr().shape
-#             #print 'Mp',Mp,'  Lp',Lp
-#             #Mp -= 1
-#             #Lp -= 1
-#             #M = Mp - 1
-#             #L = Lp - 1
-#             self._umask = self.maskr()[:, :-1] * self.maskr()[:, 1:]
-#             self._vmask = self.maskr()[:-1]   * self.maskr()[1:]
-#             self._pmask = self._umask[:-1] * self._umask[1:]
-#         else:
-#             self._vmask = self.read_nc('mask_v')
-#             self._pmask = self.read_nc('mask_psi')
-#         return self
-
-
-#     def umask(self):
-#         return self._umask
-#         # Not sure about all below (29/12/2017) BUT indices needed
-#         # for tiled grids...
-#         # added '-1' 1/9/2016 cos problem in py_mercator_ini line ~385
-#         '''try:
-#             return self._umask[self.j0:self.j1, self.i0:self.i1-1]
-#         except:
-#             return self._umask[self.j0:self.j1, self.i0:-2]'''
-
-
-#     def vmask(self):
-#         return self._vmask
-#         # Not sure about all below (29/12/2017)
-#         # added '-1' 1/9/2016 cos problem in py_mercator_ini line ~385
-#         '''try:
-#             return self._vmask[self.j0:self.j1-1, self.i0:self.i1]
-#         except:
-#             return self._vmask[self.j0:-2, self.i0:self.i1]'''
-
-
-#     def pmask(self):
-#         print('fix me')
-#         return self._pmask
-
-
-#     def mask3d(self):
-#         '''
-#         3d stack of mask same size as N
-#         '''
-#         return np.tile(self.maskr(), (np.int(self.N), 1, 1))
-
-
-#     def umask3d(self):
-#         '''
-#         3d stack of umask same size as N
-#         '''
-#         return np.tile(self.umask(), (np.int(self.N), 1, 1))
-
-
-#     def vmask3d(self):
-#         '''
-#         3d stack of vmask same size as N
-#         '''
-#         return np.tile(self.vmask(), (np.int(self.N), 1, 1))
-
-
-#     def boundary(self):
-#         '''
-#         Return lon,lat of perimeter around a Croco grid
-#         '''
-#         lon = np.hstack((self.lon()[0:, 0], self.lon()[-1, 1:-1],
-#                          self.lon()[-1::-1, -1], self.lon()[0, -2::-1]))
-#         lat = np.hstack((self.lat()[0:, 0], self.lat()[-1, 1:-1],
-#                          self.lat()[-1::-1, -1], self.lat()[0, -2::-1]))
-#         return lon, lat
-
-
-#     def VertCoordType(self):
-#         nc = netcdf.Dataset(self.grdfile, 'r')
-#         var = nc.VertCoordType
-#         nc.close()
-#         return var
-
-#     def title(self):
-#         nc = netcdf.Dataset(self.grdfile, 'r')
-#         var = nc.title
-#         nc.close()
-#         return var
+        var = xr.DataArray(data=data, dims=dims)
+        return var
 
 
 
-    # def _scoord2z(self, point_type, ssh, alpha, beta):
-    #     """
-    #     # z = scoord2z(h, theta_s, theta_b, hc, N, point_type, scoord, ssh)
-    #     scoord2z finds z at either rho or w points (positive up, zero at rest surface)
-    #     h          = array of depths (e.g., from grd file)
-    #     theta_s    = surface focusing parameter
-    #     theta_b    = bottom focusing parameter
-    #     hc         = critical depth
-    #     N          = number of vertical rho-points
-    #     point_type = 'r' or 'w'
-    #     scoord     = 'new2008' :new scoord 2008, 'new2006' : new scoord 2006,
-    #                   or 'old1994' for Song scoord
-    #     ssh       = sea surface height
-    #     message    = set to False if don't want message
-    #     """
-    #     def CSF(self, sc):
-    #         '''
-    #         Allows use of theta_b > 0 (July 2009)
-    #         '''
-    #         one64 = np.float64(1)
-    #         if self.theta_s > 0.:
-    #             csrf = ((one64 - np.cosh(self.theta_s * sc))
-    #                        / (np.cosh(self.theta_s) - one64))
-    #         else:
-    #             csrf = -sc ** 2
-    #         sc1 = csrf + one64
-    #         if self.theta_b > 0.:
-    #             Cs = ((np.exp(self.theta_b * sc1) - one64)
-    #                 / (np.exp(self.theta_b) - one64) - one64)
-    #         else:
-    #             Cs = csrf
-    #         return Cs
-    #     #
-    #     try:
-    #         self.scoord
-    #     except:
-    #         self.scoord = 'new2008'
-    #     # N = np.float64(self.N.copy())
-    #     N = np.float64(self.N)
-    #     cff1 = 1. / np.sinh(self.theta_s)
-    #     cff2 = 0.5 / np.tanh(0.5 * self.theta_s)
-    #     sc_w = (np.arange(N + 1, dtype=np.float64) - N) / N
-    #     sc_r = ((np.arange(1, N + 1, dtype=np.float64)) - N - 0.5) / N
+
+    def get_pv(self,tindex,depth=None, minlev=None, maxlev=None, typ='ijk'):
+
+        mask = self.wrapper.masks['mask_r']
+        pv = np.full_like(mask,np.nan)
+
+        # pv from minlev to maxlev
+        if depth is None or depth<=0:
+            pv = np.tile(pv,(maxlev-minlev,1,1))
+            pv[:,1:-1,1:-1] = self.ertel(tindex,minlev=minlev,maxlev=maxlev,typ=typ)
+        # pv on a level
+        elif depth > 0:
+            pv[1:-1,1:-1] = self.ertel(tindex,minlev=int(depth)-2,maxlev=int(depth-1),typ=typ) 
+        return pv
+
+
+    def ertel(self,tindex, minlev=None, maxlev=None, typ='ijk'):                  
+        #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        #
+        #   epv    - The ertel potential vorticity with respect to property 'lambda'
+        #
+        #                                       [ curl(u) + f ]
+        #   -  epv is given by:           EPV = --------------- . del(lambda)
+        #                                            rho
+        #
+        #   -  pvi,pvj,pvk - the x, y, and z components of the potential vorticity.
+        #
+        #   -  Ertel PV is calculated on horizontal rho-points, vertical w-points.
+        #
+        #
+        #   tindex   - The time index at which to calculate the potential vorticity.
+        #   depth    - depth 
+        #
+        # Adapted from rob hetland.
+        #
+        #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        #
+        #
+        # Grid parameters
+        #
+        pm = self.wrapper.metrics['dx_r']
+        pm = np.tile(pm,(maxlev-minlev+1,1,1))
+        pn = self.wrapper.metrics['dy_r']
+        pn = np.tile(pn,(maxlev-minlev+1,1,1))
+        f = self.wrapper.metrics['f']
+        f = np.tile(f,(maxlev-minlev+1,1,1))
+        rho0=self.rho0
+        #
+        # 3D variables
+        #
+        ssh = self.variables['ssh'].isel(t=tindex).values
+        dz = self.wrapper.scoord2dz_r(ssh, alpha=0., beta=0)[minlev:maxlev+1,:,:]
+
+        u = self.variables['u'].isel(t=tindex, z_r=slice(minlev,maxlev+1))
+        v = self.variables['v'].isel(t=tindex, z_r=slice(minlev,maxlev+1))
+
+        try:
+            rho = self.variables['rho'].isel(t=tindex, z_r=slice(minlev,maxlev+1))
+        except:
+            # temp = self.variables['temp'].isel(t=tindex, z_r=slice(minlev,maxlev+1))
+            # salt = self.variables['salt'].isel(t=tindex, z_r=slice(minlev,maxlev+1))
+            # rho = self.rho_eos(temp,salt,0)
+            print('rho not in history file')
+            return
         
-    #     #sc_w = np.arange(-1., 1. / N, 1. / N, dtype=np.float64)
-    #     #sc_r = 0.5 * (sc_w[1:] + sc_w[:-1])
-        
-    #     if 'w' in point_type:
-    #         sc = sc_w
-    #         N += 1. # add a level
-    #     else:
-    #         sc = sc_r
-    #     #Cs = (1. - self.theta_b) * cff1 * np.sinh(self.theta_s * sc)  \
-    #              #+ self.theta_b * (cff2 * np.tanh(self.theta_s * (sc + 0.5)) - 0.5)
-    #     z  = np.empty((int(N),) + self.h().shape, dtype=np.float64)
-    #     if self.scoord in 'new2008':
-    #         Cs = CSF(self, sc)
-    #     if self.scoord in 'new2006' or self.scoord in 'new2008':
-    #         hinv = 1. / (self.h() + self.hc)
-    #         cff = (self.hc * sc).squeeze()
-    #         cff1 = (Cs).squeeze()
-    #         for k in np.arange(N, dtype=int):
-    #             z[k] = ssh + (ssh + self.h()) * (cff[k] + cff1[k] * self.h()) * hinv
-    #     elif self.scoord in 'old1994':
-    #         hinv = 1. / self.h()
-    #         cff  = (self.hc * (sc - Cs)).squeeze()
-    #         cff1 = Cs.squeeze()
-    #         cff2 = (sc + 1).squeeze()
-    #         for k in np.arange(N) + 1:
-    #             z0      = cff[k-1] + cff1[k-1] * self.h()
-    #             z[k-1, :] = z0 + ssh * (1. + z0 * hinv)
-    #     else:
-    #         raise Exception("Unknown scoord, should be 'new2008' or 'old1994'")
-    #     if self.sc_r is None:
-    #         self.sc_r = sc_r
-    #     return z.squeeze(), np.float32(Cs)
+        if 'k' in typ:
+            #
+            #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+            #  Ertel potential vorticity, term 1: [f + (dv/dx - du/dy)]*drho/dz
+            #
+            # Compute d(v)/d(xi) at PSI-points.
+            #
+            dy = 0.25 * (pm[:,:-1,1:]+pm[:,1:,1:]+pm[:,:-1,:-1]+pm[:,1:,:-1])
+            dvdxi = np.diff(v ,n=1,axis=2) / dy
+            #
+            #  Compute d(u)/d(eta) at PSI-points.
+            #
+            dy = 0.25 * (pn[:,:-1,1:]+pn[:,1:,1:]+pn[:,:-1,:-1]+pn[:,1:,:-1])
+            dudeta = np.diff(u ,n=1,axis=1) / dy
+            #
+            #  Compute Ertel potential vorticity <k hat> at horizontal RHO-points and
+            #  vertical W-points.
+            #
+            omega = dvdxi - dudeta
+            omega = 0.25 * (omega[:,:-1,1:]+omega[:,1:,1:]+omega[:,:-1,:-1]+omega[:,1:,:-1])
+
+            pvk = (f[:,1:-1,1:-1] + omega)
+            # dz = self.crocoGrid.scoord2dz(zeta, alpha=0., beta=0.)
+            dz_w = 0.5*(dz[:-1,1:-1,1:-1]+dz[1:,1:-1,1:-1])
+            pvk = np.diff(pvk,n=1,axis=0) / dz_w
+        else:
+            pvk = 0.
+
+        if 'i' in typ:
+            #
+            #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+            #  Ertel potential vorticity, term 2: (dv/dz)*(drho/dx)
+            #
+            #  Compute d(v)/d(z) at horizontal V-points and vertical W-points
+            #
+            dz_v = 0.5 * (dz[:,1:,:]+dz[:,:-1,:])
+            # dz_v = self.crocoGrid.scoord2dz_v(zeta, alpha=0., beta=0.)
+            dvdz = np.diff(v,axis=0)/(0.5*(dz_v[:-1,:,:]+dz_v[1:,:,:]))
+            #
+            #  Compute d(rho)/d(xi) at horizontal U-points and vertical RHO-points
+            #
+            dx = 0.5 * (pm[:,:,:-1]+pm[:,:,:-1])
+            drhodx = np.diff(rho,axis=2) / dx
+            #
+            #  Add in term 2 contribution to Ertel potential vorticity at horizontal RHO-points and
+            #  vertical W-points.
+            #
+            pvi = 0.5*(dvdz[:,:-1,1:-1]+dvdz[:,1:,1:-1]) * \
+                  0.25*(drhodx[1:,1:-1,:-1]+drhodx[1:,1:-1,1:]+drhodx[:-1,1:-1,:-1]+drhodx[:-1,1:-1,1:])
+        else:
+            pvi = 0.
+
+        if 'j' in typ:
+            #
+            #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+            #  Ertel potential vorticity, term 3: (du/dz)*(drho/dy)
+            #
+            #  Compute d(u)/d(z) at horizontal U-points and vertical W-points
+            #
+            dz_u = 0.5 * (dz[:,:,1:]+dz[:,:,:-1])
+            # dz_u = self.crocoGrid.scoord2dz_u(zeta, alpha=0., beta=0.)
+            dudz = np.diff(u,axis=0)/(0.5*(dz_u[:-1,:,:]+dz_u[1:,:,:]))
+            #
+            #  Compute d(rho)/d(eta) at horizontal V-points and vertical RHO-points
+            #
+            dy = 0.5 * (pn[:,:-1,:]+pn[:,:-1,:])
+            drhodeta = np.diff(rho,axis=1) / dy
+            #
+            #  Add in term 3 contribution to Ertel potential vorticity at horizontal RHO-points and
+            #  vertical W-points..
+            #
+            pvj = 0.5*(dudz[:,1:-1,1:]+dudz[:,1:-1,:-1]) * \
+                  0.25*(drhodeta[1:,:-1,1:-1]+drhodeta[1:,1:,1:-1]+drhodeta[:-1,:-1,1:-1]+drhodeta[:-1,1:,1:-1])
+        else:
+            pvj = 0.
+
+        #
+        #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        # Sum potential vorticity components, and divide by rho0
+        #
+        pvi = -pvi/rho0
+        pvj =  pvj/rho0
+        pvk =  pvk/rho0
+        #
+        return(pvi + pvj + pvk)
+        #
+        #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+        ####################################################################################
 
 
-#     # def scoord2z_r(self, ssh=0., alpha=0., beta=1.):
-#     #     '''
-#     #     Depths at vertical rho points
-#     #     '''
-#     #     return self._scoord2z('r', ssh=ssh, alpha=alpha, beta=beta)[0]
-
-
-#     def Cs_r(self, ssh=0., alpha=0., beta=1.):
-#         '''
-#         S-coordinate stretching curves at rho points
-#         '''
-#         return self._scoord2z('r', ssh=ssh, alpha=alpha, beta=beta)[1]
-
-
-#     def scoord2z_w(self, ssh=0., alpha=0., beta=1.):
-#         '''
-#         Depths at vertical w points
-#         '''
-#         return self._scoord2z('w', ssh=ssh, alpha=alpha, beta=beta)[0]
-
-
-#     def Cs_w(self, ssh=0., alpha=0., beta=1.):
-#         '''
-#         S-coordinate stretching curves at w points
-#         '''
-#         return self._scoord2z('w', ssh=ssh, alpha=alpha, beta=beta)[1]
-
-#     def _set_dz_rho_points(self, ssh=0., alpha=0., beta=1):
-#         """
-#         Set depths of sigma layers at rho points, 3d matrix.
-#         """
-#         dz = self._scoord2z('w', ssh=ssh, alpha=alpha, beta=beta)[0]
-#         self._dz_rho_points = dz[1:] - dz[:-1]
-
-
-#     def scoord2dz(self, ssh=0., alpha=0., beta=1.):
-#         """
-#         dz at rho points, 3d matrix, depths of sigma layers
-#         """
-#         dz = self._scoord2z('w', ssh=ssh, alpha=alpha, beta=beta)[0]
-#         return dz[1:] - dz[:-1]
-
-#     def scoord2dz_u(self, ssh=0., alpha=0., beta=1.):
-#         '''
-#         dz at u points, 3d matrix, depths of sigma layers
-#         '''
-#         dz = self.scoord2dz(ssh=0., alpha=0., beta=1.)
-#         return self.rho2u_3d(dz)
-
-#     def scoord2dz_v(self, ssh=0., alpha=0., beta=1.):
-#         '''
-#         dz at v points, 3d matrix, depths of sigma layers
-#         '''
-#         dz = self.scoord2dz(ssh=0., alpha=0., beta=1.)
-#         return self.rho2v_3d(dz)
-
-
-
-#     # def get_depths(self,fname,tindex,type):
-
-#     #     ssh=0.*self.h
-
-#     #     # open history file
-#     #     #
-#     #     if os.path.isfile(fname):
-#     #       nc=Dataset(fname, 'r')
-#     #       ncvars = nc.variables.keys() 
-#     #       if "ssh" in ncvars:
-#     #         ssh=np.squeeze(nc.variables['ssh'][tindex,:,:])
-#     #       nc.close()
-
-#     #     vtype=type
-#     #     if (type=='u')|(type=='v'):
-#     #       vtype='r'
-#     #     z=self.zlevs(ssh,vtype)
-#     #     if type=='u':
-#     #       z=rho2u_3d(z)
-#     #     if type=='v':
-#     #       z=rho2v_3d(z)
-#     #     return z
-
-
-
-#     # def zlevs(self,ssh=0,type='r'):
-#     #   ################################################################
-#     #   #
-#     #   #  function z = zlevs(h,ssh,theta_s,theta_b,hc,N,type,vtransform)
-#     #   #
-#     #   #  this function compute the depth of rho or w points for ROMS
-#     #   #
-#     #   #  On Input:
-#     #   #
-#     #   #    type    'r': rho point 'w': w point 
-#     #   #    vtransform  1=> old v transform (Song, 1994) 
-#     #   #                2=> new v transform (Shcheptekin, 2006)
-#     #   #  On Output:
-#     #   #
-#     #   #    z       Depths (m) of RHO- or W-points (3D matrix).
-#     #   # 
-#     #   ################################################################
-
-
-#     #     #
-#     #     # Create S-coordinate system: based on model topography h(i,j),
-#     #     # fast-time-averaged free-surface field and vertical coordinate
-#     #     # transformation metrics compute evolving depths of of the three-
-#     #     # dimensional model grid. Also adjust ssh for dry cells.
-#     #     # 
-#     #     h=np.where(self.h == 0., 1.e-2, self.h)  
-#     #     Dcrit=0.01   # min water depth in dry cells
-#     #     mask = np.where(ssh<(Dcrit-h))
-#     #     ssh[mask]=Dcrit-h[mask]
-#     #     #
-#     #     hinv=1./h
-#     #     z=np.zeros((self.N,self.M,self.L))
-#     #     # if self.Vtransform == 2 :
-#     #     if type=='w':
-#     #         cff1=np.squeeze(self.Cs_w)
-#     #         cff2=self.sc_w+1
-#     #         sc=self.sc_w
-#     #     else:
-#     #         cff1=np.squeeze(self.Cs_r)
-#     #         cff2=self.sc_r+1
-#     #         sc=self.sc_r
-#     #     h2=(h+self.hc)
-#     #     cff=np.squeeze(self.hc*sc)
-#     #     h2inv=1./h2
-#     #     for k in range(0,self.N):
-#     #         z0=cff[k]+cff1[k]*h
-#     #         z[k,:,:]=z0*h/(h2) + ssh*(1.+z0*h2inv)
-#     #     # else:
-#     #     #     cff1=self.Cs
-#     #     #     cff2=self.sc+1
-#     #     #     cff=self.hc*(self.sc-self.Cs)
-#     #     #     cff2=self.sc+1
-#     #     #     for k in range(0,self.N):
-#     #     #         z0=cff[k]+cff1[k]*h
-#     #     #         z[k,:,:]=z0+ssh*(1.+z0*hinv)
-
-
-#     #     return z
 
     def zslice(self,var,mask,z,depth,findlev=False):
         """
@@ -560,6 +374,7 @@ class Croco(object):
         z2 = np.zeros_like(z[0,:,:])
         v1 = np.zeros_like(z[0,:,:])
         v2 = np.zeros_like(z[0,:,:])
+
         for j in range(Mp):
             for i in range(Lp):
                 k = levs[j,i]
@@ -567,9 +382,19 @@ class Croco(object):
                 z2[j,i] = z[k,j,i]
                 v1[j,i] = var[k+1,j,i]
                 v2[j,i] = var[k,j,i]
-        vnew=mask*(((v1-v2)*depth+v2*z1-v1*z2)/(z1-z2))
+        zmask = np.where(z2>depth,np.nan,1)
+        vnew=mask*zmask*(((v1-v2)*depth+v2*z1-v1*z2)/(z1-z2))
         return vnew,minlev,maxlev
 
+
+    def get_run_name(self):
+        filename = self.wrapper.keymap_files['variable_file']
+        index = filename.find("/CROCO_FILES")
+        if index == -1:
+            runName = ''
+        else:
+            runName = os.path.basename(os.path.dirname(filename[:index]))
+        return runName
 
     @staticmethod
     def rho2u_2d(rho_in):

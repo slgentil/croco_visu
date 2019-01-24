@@ -163,8 +163,7 @@ class Croco(object):
 
 
     def list_of_derived(self):
-        '''
-        '''
+        ''' List of calculated variables implemented '''
         crocofile = self.crocofile
         if isinstance(crocofile, list):
             crocofile = crocofile[0]
