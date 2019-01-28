@@ -59,7 +59,7 @@ class Croco(object):
         ''' List of calculated variables implemented '''
         keys = []
         keys.append('pv_ijk')
-        keys.append('pv_k')
+        keys.append('zeta_k')
         return keys
 
     def get_variable(self,variableName, tindex=None, xindex=None, yindex=None, zindex=None):
@@ -233,6 +233,7 @@ class Croco(object):
 
         u = self.variables['u'].isel(t=tindex, z_r=slice(minlev,maxlev+1))
         v = self.variables['v'].isel(t=tindex, z_r=slice(minlev,maxlev+1))
+        w = self.variables['w'].isel(t=tindex, z_r=slice(minlev,maxlev+1))
 
         try:
             rho = self.variables['rho'].isel(t=tindex, z_r=slice(minlev,maxlev+1))
@@ -250,31 +251,36 @@ class Croco(object):
             #
             # Compute d(v)/d(xi) at PSI-points.
             #
-            dy = 0.25 * (pm[:,:-1,1:]+pm[:,1:,1:]+pm[:,:-1,:-1]+pm[:,1:,:-1])
-            dvdxi = np.diff(v ,n=1,axis=2) / dy
+            dx = 0.25 * (pm[:,:-1,1:]+pm[:,1:,1:]+pm[:,:-1,:-1]+pm[:,1:,:-1])
+            dvdxi = np.diff(v ,n=1,axis=2) / dx
             #
             #  Compute d(u)/d(eta) at PSI-points.
             #
             dy = 0.25 * (pn[:,:-1,1:]+pn[:,1:,1:]+pn[:,:-1,:-1]+pn[:,1:,:-1])
             dudeta = np.diff(u ,n=1,axis=1) / dy
             #
+            #  Compute d(rho)/d(z) at horizontal RHO-points and vertical W-points
+            #
+            dz_w = 0.5*(dz[:-1,:,:]+dz[1:,:,:])
+            drhodz = np.diff(rho,n=1,axis=0) / dz_w
+            #
             #  Compute Ertel potential vorticity <k hat> at horizontal RHO-points and
             #  vertical W-points.
-            #
             omega = dvdxi - dudeta
-            omega = 0.25 * (omega[:,:-1,1:]+omega[:,1:,1:]+omega[:,:-1,:-1]+omega[:,1:,:-1])
-
-            pvk = (f[:,1:-1,1:-1] + omega)
-            # dz = self.crocoGrid.scoord2dz(zeta, alpha=0., beta=0.)
-            dz_w = 0.5*(dz[:-1,1:-1,1:-1]+dz[1:,1:-1,1:-1])
-            pvk = np.diff(pvk,n=1,axis=0) / dz_w
+            omega = f[:,1:-1,1:-1] + 0.25 * (omega[:,:-1,1:]+omega[:,1:,1:]+omega[:,:-1,:-1]+omega[:,1:,:-1])
+            pvk = 0.5*(omega[:-1,:,:]+omega[1:,:,:]) * drhodz[:,1:-1,1:-1]
         else:
             pvk = 0.
 
         if 'i' in typ:
             #
             #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-            #  Ertel potential vorticity, term 2: (dv/dz)*(drho/dx)
+            #  Ertel potential vorticity, term 2: (dw/dy - dv/dz)*(drho/dx)
+            #
+            #  Compute d(w)/d(y) at horizontal V-points and vertical RHO-points
+            #
+            dy = 0.5 * (pn[:,:-1,:]+pn[:,1:,:])
+            dwdy = np.diff(w,axis=1)/dy
             #
             #  Compute d(v)/d(z) at horizontal V-points and vertical W-points
             #
@@ -284,27 +290,34 @@ class Croco(object):
             #
             #  Compute d(rho)/d(xi) at horizontal U-points and vertical RHO-points
             #
-            dx = 0.5 * (pm[:,:,:-1]+pm[:,:,:-1])
+            dx = 0.5 * (pm[:,:,1:]+pm[:,:,:-1])
             drhodx = np.diff(rho,axis=2) / dx
             #
             #  Add in term 2 contribution to Ertel potential vorticity at horizontal RHO-points and
             #  vertical W-points.
             #
-            pvi = 0.5*(dvdz[:,:-1,1:-1]+dvdz[:,1:,1:-1]) * \
-                  0.25*(drhodx[1:,1:-1,:-1]+drhodx[1:,1:-1,1:]+drhodx[:-1,1:-1,:-1]+drhodx[:-1,1:-1,1:])
+            pvi = ( 0.25*(dwdy[1:,:-1,1:-1]+dwdy[1:,1:,1:-1]+
+            	          dwdy[:-1,:-1,1:-1]+dwdy[:-1,1:,1:-1]) - \
+            	  0.5*(dvdz[:,:-1,1:-1]+dvdz[:,1:,1:-1])) * \
+                  0.25*(drhodx[1:,1:-1,:-1]+drhodx[1:,1:-1,1:]+ \
+                  	    drhodx[:-1,1:-1,:-1]+drhodx[:-1,1:-1,1:])
         else:
             pvi = 0.
 
         if 'j' in typ:
             #
             #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-            #  Ertel potential vorticity, term 3: (du/dz)*(drho/dy)
+            #  Ertel potential vorticity, term 3: (du/dz - dw/dx)*(drho/dy)
             #
             #  Compute d(u)/d(z) at horizontal U-points and vertical W-points
             #
             dz_u = 0.5 * (dz[:,:,1:]+dz[:,:,:-1])
-            # dz_u = self.crocoGrid.scoord2dz_u(zeta, alpha=0., beta=0.)
             dudz = np.diff(u,axis=0)/(0.5*(dz_u[:-1,:,:]+dz_u[1:,:,:]))
+            #
+            #  Compute d(w)/d(x) at horizontal U-points and vertical RHO-points
+            #
+            dx = 0.5 * (pm[:,:,1:]+pm[:,:,:-1])
+            dwdx = np.diff(w,axis=2)/(0.5*(dx[:-1,:,:]+dx[1:,:,:]))
             #
             #  Compute d(rho)/d(eta) at horizontal V-points and vertical RHO-points
             #
@@ -314,8 +327,11 @@ class Croco(object):
             #  Add in term 3 contribution to Ertel potential vorticity at horizontal RHO-points and
             #  vertical W-points..
             #
-            pvj = 0.5*(dudz[:,1:-1,1:]+dudz[:,1:-1,:-1]) * \
-                  0.25*(drhodeta[1:,:-1,1:-1]+drhodeta[1:,1:,1:-1]+drhodeta[:-1,:-1,1:-1]+drhodeta[:-1,1:,1:-1])
+            pvj = ( 0.5*(dudz[:,1:-1,1:]+dudz[:,1:-1,:-1]) - \
+                    0.25*(dwdx[1:,1:-1,1:]+dwdx[1:,1:-1,:-1]+ \
+                    	dwdx[:-1,1:-1,1:]+dwdx[:-1,1:-1,:-1]))* \
+                  0.25*(drhodeta[1:,:-1,1:-1]+drhodeta[1:,1:,1:-1]+ \
+                  	    drhodeta[:-1,:-1,1:-1]+drhodeta[:-1,1:,1:-1])
         else:
             pvj = 0.
 
@@ -323,7 +339,7 @@ class Croco(object):
         #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         # Sum potential vorticity components, and divide by rho0
         #
-        pvi = -pvi/rho0
+        pvi =  pvi/rho0
         pvj =  pvj/rho0
         pvk =  pvk/rho0
         #
@@ -333,6 +349,86 @@ class Croco(object):
 
         ####################################################################################
 
+
+
+
+
+    def get_zetak(self,tindex,depth=None, minlev=None, maxlev=None):
+
+        mask = self.wrapper.masks['mask_r']
+        pv = np.full_like(mask,np.nan)
+
+        # pv from minlev to maxlev
+        if depth is None or depth<=0:
+            pv = np.tile(pv,(maxlev-minlev,1,1))
+            pv[:,1:-1,1:-1] = self.zetak(tindex,minlev=minlev,maxlev=maxlev-1)
+        # pv on a level
+        elif depth > 0:
+            pv[1:-1,1:-1] = self.zetak(tindex,minlev=int(depth)-1,maxlev=int(depth-1)) 
+        return pv
+
+
+    def zetak(self,tindex, minlev=None, maxlev=None):                  
+        #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        #
+        #   
+        #
+        #                                      
+        #   -  zetak is given by:      (dv/dx - du/dy)/f  
+        #
+        #   -  zetak is calculated at RHO-points
+        #
+        #
+        #   tindex   - The time index at which to calculate the potential vorticity.
+        #   depth    - depth 
+        #
+        # Adapted from rob hetland.
+        #
+        #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        #
+        #
+        # Grid parameters
+        #
+        pm = self.wrapper.metrics['dx_r']
+        pm = np.tile(pm,(maxlev-minlev+1,1,1))
+        pn = self.wrapper.metrics['dy_r']
+        pn = np.tile(pn,(maxlev-minlev+1,1,1))
+        f = self.wrapper.metrics['f']
+        f = np.tile(f,(maxlev-minlev+1,1,1))
+        rho0=self.rho0
+        #
+        # 3D variables
+        #
+        ssh = self.variables['ssh'].isel(t=tindex).values
+        dz = self.wrapper.scoord2dz_r(ssh, alpha=0., beta=0)[minlev:maxlev+1,:,:]
+
+        u = self.variables['u'].isel(t=tindex, z_r=slice(minlev,maxlev+1))
+        v = self.variables['v'].isel(t=tindex, z_r=slice(minlev,maxlev+1))
+        
+        #
+        #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        #  Ertel potential vorticity, term 1: (dv/dx - du/dy)/f
+        #
+        # Compute d(v)/d(xi) at PSI-points.
+        #
+        dx = 0.25 * (pm[:,:-1,1:]+pm[:,1:,1:]+pm[:,:-1,:-1]+pm[:,1:,:-1])
+        dvdxi = np.diff(v ,n=1,axis=2) / dx
+        #
+        #  Compute d(u)/d(eta) at PSI-points.
+        #
+        dy = 0.25 * (pn[:,:-1,1:]+pn[:,1:,1:]+pn[:,:-1,:-1]+pn[:,1:,:-1])
+        dudeta = np.diff(u ,n=1,axis=1) / dy
+        #
+        #  Compute Ertel potential vorticity <k hat> at horizontal RHO-points and
+        #  vertical RHO-points.
+        omega = dvdxi - dudeta
+        return( 0.25 * (omega[:,:-1,1:]+omega[:,1:,1:]+ \
+        	             omega[:,:-1,:-1]+omega[:,1:,:-1]) / f[:,1:-1,1:-1] )
+        
+
+        #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+        ####################################################################################
 
 
     def zslice(self,var,mask,z,depth,findlev=False):

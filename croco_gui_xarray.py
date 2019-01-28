@@ -71,6 +71,7 @@ class SectionFrame(wx.Frame):
         self.AnimationBtn = wx.Button(self.panel, wx.ID_ANY, "Animation")
         self.startTimeTxt = wx.TextCtrl(self.panel, wx.ID_ANY, "1", style=wx.TE_CENTRE|wx.TE_PROCESS_ENTER)
         self.endTimeTxt = wx.TextCtrl(self.panel, wx.ID_ANY, "1", style=wx.TE_CENTRE|wx.TE_PROCESS_ENTER)
+        self.CancelBtn = wx.Button(self.panel, wx.ID_ANY, "Cancel")
         self.SaveBtn = wx.Button(self.panel, wx.ID_ANY, "Save")
         
         self.ResetColorBtn = wx.Button(self.panel, wx.ID_ANY, "Reset Color")
@@ -79,6 +80,7 @@ class SectionFrame(wx.Frame):
 
         # bind the menu event to an event handler
         self.canvas.mpl_connect('button_press_event', self.onFigureClick)
+        self.canvas.mpl_connect('<Escape>', self.abortAnim)
         self.AnimationBtn.Bind(wx.EVT_BUTTON, self.onAnimationBtn)
         self.startTimeTxt.Bind(wx.EVT_TEXT_ENTER, self.onstartTimeTxt)
         self.endTimeTxt.Bind(wx.EVT_TEXT_ENTER, self.onendTimeTxt)
@@ -88,6 +90,7 @@ class SectionFrame(wx.Frame):
         self.ResetColorBtn.Bind(wx.EVT_BUTTON, self.onResetColorBtn)
         self.MinColorTxt.Bind(wx.EVT_TEXT_ENTER, self.onMinColorTxt)
         self.MaxColorTxt.Bind(wx.EVT_TEXT_ENTER, self.onMaxColorTxt)
+        self.CancelBtn.Bind(wx.EVT_BUTTON, self.onCancelBtn)
         self.SaveBtn.Bind(wx.EVT_BUTTON, self.onSaveBtn)
         self.TimeTxt.Bind(wx.EVT_TEXT_ENTER, self.onTimeTxt)
 
@@ -144,6 +147,7 @@ class SectionFrame(wx.Frame):
         buttonsSizer.Add(self.AnimationBtn,0, wx.ALL, 5)
         buttonsSizer.Add(self.startTimeTxt,0, wx.ALL, 5)
         buttonsSizer.Add(self.endTimeTxt,0, wx.ALL, 5)
+        buttonsSizer.Add(self.CancelBtn,0, wx.ALL, 5)
         buttonsSizer.Add(self.SaveBtn,0, wx.ALL, 5)
 
         colorSizer.Add(self.ResetColorBtn, 0, wx.ALL, 5)
@@ -177,21 +181,38 @@ class SectionFrame(wx.Frame):
         self.drawz(setlim=False)
 
 
+    def onCancelBtn(self,event):
+    	# global abort_anim
+    	abort_anim=True
+    	print("Not implemented yet")
+
+    def abortAnim(self,event):
+    	# global abort_anim
+		self.anim.event_source.stop()
+
     # Event handler for animation
     def onAnimationBtn(self,event):
-        """Event handler for the button click Animation button"""
-        printDir = self.croco.startDir+"/Figures_" + self.croco.get_run_name()+"/"
-        if not os.path.isdir(printDir):
-                os.mkdir(printDir)
-        os.system('rm -rf '+printDir+'dummy.mp4')
-        # self.clim = [np.min(self.variable),np.max(self.variable)]
-        save_count = self.endTimeIndex - self.startTimeIndex + 1
-        self.anim = animation.FuncAnimation(self.figure, self.animate, \
-                   frames = range(self.startTimeIndex,self.endTimeIndex+1), repeat=False, \
-                   blit = False, save_count=save_count)
-        # self.canvas.draw()
-        mpl.verbose.set_level("helpful")
-        self.anim.save(printDir+'dummy.mp4"')
+	    # abort_anim = False
+
+		# def onClick(event):
+		# 	# nonlocal abort_anim
+		# 	# if abort_anim:
+		# 	self.anim.event_source.stop()
+		# 	# abort_anim = False
+
+		"""Event handler for the button click Animation button"""
+		printDir = self.croco.startDir+"/Figures_" + self.croco.get_run_name()+"/"
+		if not os.path.isdir(printDir):
+		        os.mkdir(printDir)
+		os.system('rm -rf '+printDir+'dummy.mp4')
+		# self.clim = [np.min(self.variable),np.max(self.variable)]
+		save_count = self.endTimeIndex - self.startTimeIndex + 1
+		self.anim = animation.FuncAnimation(self.figure, self.animate, \
+		           frames = range(self.startTimeIndex,self.endTimeIndex+1), repeat=False, \
+		           blit = False, save_count=save_count)
+		mpl.verbose.set_level("helpful")
+		self.anim.save(printDir+'dummy.mp4')
+		# self.canvas.draw()
 
     # Event handler for Save animation
     def onSaveBtn(self,event): 
@@ -209,7 +230,13 @@ class SectionFrame(wx.Frame):
 
     def animate( self, i):
         """ Function to plot animation in canvas """
+        # global abort_anim
         self.timeIndex = i
+        # if abort_anim:
+        # 	self.anim.event_source.stop()
+        # 	abort_anim = False
+        # else:
+        # 	self.updateVariableZ(setlim=False)
         self.updateVariableZ(setlim=False)
 
     def onstartTimeTxt(self,event):
@@ -870,7 +897,9 @@ class CrocoGui(wx.Frame):
                 y = np.zeros_like(x)
                 for it in range(len(x)):
                     if 'pv' in self.variableName:
-                        y[it] = self.croco.get_pv(it, depth=self.levelIndex,typ=self.variableName)[self.latIndex,self.lonIndex]
+                        y[it] = self.croco.get_pv(it, depth=self.levelIndex)[self.latIndex,self.lonIndex]
+                    if self.variableName == 'zeta_k':
+                        y[it] = self.croco.get_zetak(it, depth=self.levelIndex,typ=self.variableName)[self.latIndex,self.lonIndex]
 
             title="{:s}, Lon={:4.1f}, Lat={:4.1f}, Level={:4.0f}".\
                 format(self.variableName,self.lon,self.lat, self.depth) 
@@ -907,6 +936,17 @@ class CrocoGui(wx.Frame):
                     if 'pv' in self.variableName:
                         # Compute pv between these levels
                         pv = self.croco.get_pv(it, depth=depth, minlev=minlev, maxlev=maxlev,typ=self.variableName)
+                        # Extract the slice of pv corresponding at the depth
+                        try:
+                            pvz = self.croco.zslice(pv,mask,z[minlev:maxlev,:,:],depth)[0]
+                        except:
+                            print("Not enough points")
+                            pass
+                        y[it]=pvz[self.latIndex,self.lonIndex]
+
+                    if self.variableName == 'zeta_k':
+                        # Compute pv between these levels
+                        pv = self.croco.get_zetak(it, depth=depth, minlev=minlev, maxlev=maxlev)
                         # Extract the slice of pv corresponding at the depth
                         try:
                             pvz = self.croco.zslice(pv,mask,z[minlev:maxlev,:,:],depth)[0]
@@ -959,6 +999,10 @@ class CrocoGui(wx.Frame):
                 pv = self.croco.get_pv(self.timeIndex, minlev=0, maxlev=self.croco.wrapper.N-1,typ=self.variableName)
                 x[1:] = pv[:,self.latIndex,self.lonIndex]
 
+            if self.variableName == 'zeta_k':
+                x = np.full_like(z, np.nan)
+                pv = self.croco.get_zetak(self.timeIndex, minlev=0, maxlev=self.croco.wrapper.N-1)
+                x[1:] = pv[:,self.latIndex,self.lonIndex]
         # Plot the profile
         self.profileFrame = ProfileFrame(croco=self.croco, \
             x=x, y=z, \
@@ -985,8 +1029,8 @@ class CrocoGui(wx.Frame):
         anim = animation.FuncAnimation(self.figure, self.animate, \
                    frames = range(self.startTimeIndex,self.endTimeIndex+1), repeat=False, \
                    blit = False, save_count=save_count)
-        self.canvas.draw()
-        anim.save(printDir+filename)
+        anim.save(printDir+filename, writer="ffmpeg")
+        # self.canvas.draw()
 
     def animate( self, i):
         # Method done at each time step of the animation
@@ -1080,6 +1124,9 @@ class CrocoGui(wx.Frame):
                 if 'pv' in self.variableName:
                     pv = self.croco.get_pv(self.timeIndex, depth=depth, typ=self.variableName)
                     self.variableXY = xr.DataArray(data=pv)
+                if self.variableName == 'zeta_k':
+                    pv = self.croco.get_zetak(self.timeIndex, depth=depth)
+                    self.variableXY = xr.DataArray(data=pv)
             else:
                 print("unknown variable ",self.variableName)
                 return
@@ -1111,6 +1158,15 @@ class CrocoGui(wx.Frame):
             elif self.variableName in self.croco.ListOfDerived:
                 if 'pv' in self.variableName:
                     pv = self.croco.get_pv(self.timeIndex, depth=depth, minlev=minlev, maxlev=maxlev,typ=self.variableName)
+                    try:
+                        zslice = self.croco.zslice(pv,mask,z[minlev:maxlev,:,:],depth)[0]
+                        self.variableXY = xr.DataArray(data=zslice)
+                    except:
+                        print("Not enough points")
+                        pass
+        
+                if self.variableName== 'zeta_k':
+                    pv = self.croco.get_zetak(self.timeIndex, depth=depth, minlev=minlev, maxlev=maxlev)
                     try:
                         zslice = self.croco.zslice(pv,mask,z[minlev:maxlev,:,:],depth)[0]
                         self.variableXY = xr.DataArray(data=zslice)
@@ -1191,6 +1247,9 @@ class CrocoGui(wx.Frame):
                     if 'pv' in self.variableName:
                         variable[it,1:,:] = self.croco.get_pv(self.timeIndex, minlev=0, maxlev=self.croco.wrapper.N-1,typ=self.variableName)[:,self.latIndex,:]
                 
+                    if self.variableName == 'zeta_k':
+                        variable[it,1:,:] = self.croco.get_zetak(self.timeIndex, minlev=0, maxlev=self.croco.wrapper.N-1)[:,self.latIndex,:]
+                
             # Get Longitude coordinates
             x = self.croco.get_coord(self.variableName, direction='x')
             x = repmat(x[self.latIndex,:].squeeze(),self.croco.wrapper.N,1)
@@ -1229,6 +1288,9 @@ class CrocoGui(wx.Frame):
                 for it in range(len(x)):
                     if 'pv' in self.variableName:
                         variable[it,1:,:] = self.croco.get_pv(self.timeIndex, minlev=0, maxlev=self.croco.wrapper.N-1,typ=self.variableName)[:,:,self.lonIndex]
+                
+                    if self.variableName == 'zeta_k':
+                        variable[it,1:,:] = self.croco.get_zetak(self.timeIndex, minlev=0, maxlev=self.croco.wrapper.N-1)[:,:,self.lonIndex]
                 
             # Get Latitude coordinates
             x = self.croco.get_coord(self.variableName, direction='y')

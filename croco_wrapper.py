@@ -13,50 +13,47 @@ second2day = 1. /86400.
 
 path = "./"
 keymap_files = {
-    'coordinate_file' : path+"Go_Meddy_his.nc",
-    'metric_file' : path+"Go_Meddy_his.nc",
-    'mask_file' : path+"Go_Meddy_his.nc",
-    'variable_file' : path+"Go_Meddy_his.nc" 
+    'coordinate_file' : path+"moz_his.nc",
+    'metric_file' : path+"moz_his.nc",
+    'mask_file' : path+"moz_his.nc",
+    'variable_file' : path+"moz_his.nc" 
 }
 
 keymap_dimensions = {
-    'xi_rho': 'x_r',
-    'eta_rho': 'y_r',
-    'xi_u': 'x_u',
-    # 'y_u': 'y_u',
-    # 'x_v': 'x_v',
-    'eta_v': 'y_v',
-    # 'x_w': 'x_w',
-    # 'y_w': 'y_w',
+    'x_rho': 'x_r',
+    'y_rho': 'y_r',
+    'x_u': 'x_u',
+    'y_u': 'y_u',
+    'x_v': 'x_v',
+    'y_v': 'y_v',
+    'x_w': 'x_w',
+    'y_w': 'y_w',
     's_rho': 'z_r',
     's_w': 'z_w',
-    'time': 't'
+    'time_counter': 't'
 }
 
 
 keymap_coordinates = {
-	'x_rho':'lon_r' ,
-	'y_rho':'lat_r' ,
-	# 'y_u':'lon_u' ,
-	# 'nav_lat_u':'lat_u' ,
-	# 'nav_lon_v':'lon_v' ,
-	# 'y_v':'lat_v' ,
-	# 'nav_lon_w':'lon_w' ,
-	# 'nav_lat_w':'lat_w' ,
-	'scrum_time':'time' 
+	'nav_lon_rho':'lon_r' ,
+	'nav_lat_rho':'lat_r' ,
+	'nav_lon_u':'lon_u' ,
+	'nav_lat_u':'lat_u' ,
+	'nav_lon_v':'lon_v' ,
+	'nav_lat_v':'lat_v' ,
+	'nav_lon_w':'lon_w' ,
+	'nav_lat_w':'lat_w' ,
+	'time_instant':'time' 
 	}
 
 
-keymap_variables = {
-    'zeta': 'ssh'
-}
 
 keymap_metrics = {
 	'pm':'dx_r',
 	'pn':'dy_r',
 	'theta_s': 'theta_s',
 	'theta_b': 'theta_b',
-	# 'Tcline': 'tcline' ,
+	'Tcline': 'tcline' ,
 	'Vtransform': 'scoord' ,
 	'hc': 'hc',
 	'h': 'h',
@@ -79,7 +76,6 @@ class CrocoWrapper(object):
         self.keymap_files = keymap_files
         self.keymap_dimensions=keymap_dimensions
         self.keymap_coordinates=keymap_coordinates
-        self.keymap_variables=keymap_variables
         self.keymap_metrics=keymap_metrics
         self.keymap_masks=keymap_masks
 
@@ -114,25 +110,14 @@ class CrocoWrapper(object):
             ds = ds.rename({key:val})
     	return ds
 
-    def change_variables(self,ds):
-        for key,val in self.keymap_variables.items():
-            ds = ds.rename({key:val})
-        return ds
-
     def change_metrics(self,ds):
         for key,val in self.keymap_metrics.items():
-            try:
-                ds = ds.rename({key:val}) 
-            except:
-                ds.attrs[key] = ds.attrs.pop(val)   	
+            ds = ds.rename({key:val})    	
         return ds
 
     def change_mask(self,ds):
         for key,val in self.keymap_masks.items():
-            try:
-                ds = ds.rename({key:val})
-            except:
-                pass    	
+            ds = ds.rename({key:val})    	
         return ds
 
     def define_dimensions(self,ds):
@@ -153,16 +138,15 @@ class CrocoWrapper(object):
         self.coords['lon_u'] = 0.5*(lon_r[:,:-1]+lon_r[:,1:])
         self.coords['lat_u'] = 0.5*(lat_r[:,:-1]+lat_r[:,1:])
         self.coords['lon_v'] = 0.5*(lon_r[:-1,:]+lon_r[1:,:])
-        self.coords['lat_v'] = 0.5*(lat_r[:-1,:]+lat_r[1:,:])
+        self.coords['lat_v'] =0.5*(lat_r[:-1,:]+lat_r[1:,:])
         self.coords['lon_w'] =lon_r
         self.coords['lat_w'] =lat_r
 
         # time = time - time_origin
         self.coords['time'] = self._get(self.dscoord,'time',chunks=self.chunks,decode_times=False)
-        self.coords['time'] = self.coords['time'] * second2day
-        # self.coords['time'].values=np.array(self.coords['time'], dtype='datetime64[D]') - \
-        #     np.array(self.coords['time'].time_origin, dtype='datetime64[D]')
-        # self.coords['time'].values=	self.coords['time'].values / np.timedelta64(1, 'D')
+        self.coords['time'].values=np.array(self.coords['time'], dtype='datetime64[D]') - \
+            np.array(self.coords['time'].time_origin, dtype='datetime64[D]')
+        self.coords['time'].values=	self.coords['time'].values / np.timedelta64(1, 'D')
 
     def define_metrics(self):
     	ds = return_xarray_dataset(self.keymap_files['metric_file'])
@@ -171,8 +155,7 @@ class CrocoWrapper(object):
     	ds = self.change_metrics(ds)
     	self.dsmetrics = ds
     	for key,val in self.keymap_metrics.items():
-        	   self.metrics[val] = self._get(self.dsmetrics,val,chunks=self.chunks)
-
+        	self.metrics[val] = self._get(self.dsmetrics,val,chunks=self.chunks)
 
     def define_masks(self):
     	ds = return_xarray_dataset(self.keymap_files['mask_file'])
@@ -181,18 +164,12 @@ class CrocoWrapper(object):
     	ds = self.change_mask(ds)
     	self.dsmask = ds
     	for key,val in self.keymap_masks.items():
-            try:
-                self.masks[val] = self._get(self.dsmask,val,chunks=self.chunks)
-                self.masks[val] = np.where(self.masks[val]==0.,np.nan,self.masks[val])
-            except:
-                mask_rho = np.ones((self.M,self.L))
-                self.masks[val] = mask_rho
+            self.masks[val] = self._get(self.dsmask,val,chunks=self.chunks)
 
     def define_variables(self):
     	ds = return_xarray_dataset(self.keymap_files['variable_file'])
     	ds = self.change_dimensions(ds)
     	ds = self.change_coords(ds)
-        ds = self.change_variables(ds)
     	self.dsvar = ds
 
     def chunk(self,chunks=None):
@@ -251,15 +228,11 @@ class CrocoWrapper(object):
         N = np.float64(self.N)
         try:
             theta_s = self.metrics['theta_s'].values
-        except:
-            theta_s = self.metrics['theta_s']
-        try:
             theta_b = self.metrics['theta_b'].values
-        except:
-            theta_b = self.metrics['theta_b']
-        try:
             hc = self.metrics['hc'].values
         except:
+            theta_s = self.metrics['theta_s']
+            theta_b = self.metrics['theta_b']
             hc = self.metrics['hc']
         h = self.metrics['h'].values
         scoord = self.metrics['scoord'].values
@@ -278,16 +251,6 @@ class CrocoWrapper(object):
         z  = np.empty((int(N),) + h.shape, dtype=np.float64)
         if scoord == 2:
             Cs = CSF(sc, theta_s, theta_b)
-        else:
-            cff1=1./np.sinh(theta_s)
-            cff2=0.5/np.tanh(0.5*theta_s)
-            if type=='w':
-                sc=(np.arange(N+1)-N)/N
-                N=N+1
-            else:
-                sc=(np.arange(N+1)-N-0.5)/N
-            Cs=(1.-theta_b)*cff1*np.sinh(theta_s*sc) \
-                +theta_b*(cff2*np.tanh(theta_s*(sc+0.5))-0.5)
         if scoord == 2:
             hinv = 1. / (h + hc)
             cff = (hc * sc).squeeze()
@@ -296,10 +259,10 @@ class CrocoWrapper(object):
                 z[k] = ssh + (ssh + h) * (cff[k] + cff1[k] * h) * hinv
         elif scoord == 1:
             hinv = 1. / h
-            cff  = (hc * (sc[:] - Cs[:])).squeeze()
+            cff  = (hc * (sc - Cs)).squeeze()
             cff1 = Cs.squeeze()
             cff2 = (sc + 1).squeeze()
-            for k in np.arange(N, dtype=int) + 1:
+            for k in np.arange(N) + 1:
                 z0      = cff[k-1] + cff1[k-1] * h
                 z[k-1, :] = z0 + ssh * (1. + z0 * hinv)
         else:
