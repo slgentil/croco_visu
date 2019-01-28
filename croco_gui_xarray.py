@@ -269,7 +269,7 @@ class SectionFrame(wx.Frame):
             key=lambda j:abs(time-times[j]))
         self.time = self.croco.wrapper._get_date(self.timeIndex)
         self.TimeTxt.SetValue(str(self.time))
-        self.updateVariableZ()
+        self.updateVariableZ(setlim=False)
 
     # Event handler for zoom
     def onZoomInBtn(self,event):    
