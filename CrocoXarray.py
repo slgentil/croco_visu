@@ -251,13 +251,13 @@ class Croco(object):
             #
             # Compute d(v)/d(xi) at PSI-points.
             #
-            dx = 0.25 * (pm[:,:-1,1:]+pm[:,1:,1:]+pm[:,:-1,:-1]+pm[:,1:,:-1])
-            dvdxi = np.diff(v ,n=1,axis=2) / dx
+            dxm1 = 0.25 * (pm[:,:-1,1:]+pm[:,1:,1:]+pm[:,:-1,:-1]+pm[:,1:,:-1])
+            dvdxi = np.diff(v ,n=1,axis=2) * dxm1
             #
             #  Compute d(u)/d(eta) at PSI-points.
             #
-            dy = 0.25 * (pn[:,:-1,1:]+pn[:,1:,1:]+pn[:,:-1,:-1]+pn[:,1:,:-1])
-            dudeta = np.diff(u ,n=1,axis=1) / dy
+            dym1 = 0.25 * (pn[:,:-1,1:]+pn[:,1:,1:]+pn[:,:-1,:-1]+pn[:,1:,:-1])
+            dudeta = np.diff(u ,n=1,axis=1) * dym1
             #
             #  Compute d(rho)/d(z) at horizontal RHO-points and vertical W-points
             #
@@ -279,8 +279,8 @@ class Croco(object):
             #
             #  Compute d(w)/d(y) at horizontal V-points and vertical RHO-points
             #
-            dy = 0.5 * (pn[:,:-1,:]+pn[:,1:,:])
-            dwdy = np.diff(w,axis=1)/dy
+            dym1 = 0.5 * (pn[:,:-1,:]+pn[:,1:,:])
+            dwdy = np.diff(w,axis=1)*dym1
             #
             #  Compute d(v)/d(z) at horizontal V-points and vertical W-points
             #
@@ -290,8 +290,8 @@ class Croco(object):
             #
             #  Compute d(rho)/d(xi) at horizontal U-points and vertical RHO-points
             #
-            dx = 0.5 * (pm[:,:,1:]+pm[:,:,:-1])
-            drhodx = np.diff(rho,axis=2) / dx
+            dxm1 = 0.5 * (pm[:,:,1:]+pm[:,:,:-1])
+            drhodx = np.diff(rho,axis=2) * dxm1
             #
             #  Add in term 2 contribution to Ertel potential vorticity at horizontal RHO-points and
             #  vertical W-points.
@@ -316,13 +316,13 @@ class Croco(object):
             #
             #  Compute d(w)/d(x) at horizontal U-points and vertical RHO-points
             #
-            dx = 0.5 * (pm[:,:,1:]+pm[:,:,:-1])
-            dwdx = np.diff(w,axis=2)/(0.5*(dx[:-1,:,:]+dx[1:,:,:]))
+            dxm1 = 0.5 * (pm[:,:,1:]+pm[:,:,:-1])
+            dwdx = np.diff(w,axis=2)*(0.5*(dxm1[:-1,:,:]+dxm1[1:,:,:]))
             #
             #  Compute d(rho)/d(eta) at horizontal V-points and vertical RHO-points
             #
-            dy = 0.5 * (pn[:,:-1,:]+pn[:,:-1,:])
-            drhodeta = np.diff(rho,axis=1) / dy
+            dym1 = 0.5 * (pn[:,:-1,:]+pn[:,:-1,:])
+            drhodeta = np.diff(rho,axis=1) * dym1
             #
             #  Add in term 3 contribution to Ertel potential vorticity at horizontal RHO-points and
             #  vertical W-points..
@@ -395,12 +395,9 @@ class Croco(object):
         pn = np.tile(pn,(maxlev-minlev+1,1,1))
         f = self.wrapper.metrics['f']
         f = np.tile(f,(maxlev-minlev+1,1,1))
-        rho0=self.rho0
         #
         # 3D variables
         #
-        ssh = self.variables['ssh'].isel(t=tindex).values
-        dz = self.wrapper.scoord2dz_r(ssh, alpha=0., beta=0)[minlev:maxlev+1,:,:]
 
         u = self.variables['u'].isel(t=tindex, z_r=slice(minlev,maxlev+1))
         v = self.variables['v'].isel(t=tindex, z_r=slice(minlev,maxlev+1))
@@ -411,13 +408,13 @@ class Croco(object):
         #
         # Compute d(v)/d(xi) at PSI-points.
         #
-        dx = 0.25 * (pm[:,:-1,1:]+pm[:,1:,1:]+pm[:,:-1,:-1]+pm[:,1:,:-1])
-        dvdxi = np.diff(v ,n=1,axis=2) / dx
+        dxm1 = 0.25 * (pm[:,:-1,1:]+pm[:,1:,1:]+pm[:,:-1,:-1]+pm[:,1:,:-1])
+        dvdxi = np.diff(v ,n=1,axis=2) * dxm1
         #
         #  Compute d(u)/d(eta) at PSI-points.
         #
-        dy = 0.25 * (pn[:,:-1,1:]+pn[:,1:,1:]+pn[:,:-1,:-1]+pn[:,1:,:-1])
-        dudeta = np.diff(u ,n=1,axis=1) / dy
+        dym1 = 0.25 * (pn[:,:-1,1:]+pn[:,1:,1:]+pn[:,:-1,:-1]+pn[:,1:,:-1])
+        dudeta = np.diff(u ,n=1,axis=1) * dym1
         #
         #  Compute Ertel potential vorticity <k hat> at horizontal RHO-points and
         #  vertical RHO-points.
@@ -430,6 +427,31 @@ class Croco(object):
 
         ####################################################################################
 
+
+
+    def get_dtdz(self,tindex,depth=None, minlev=None, maxlev=None):
+
+        mask = self.wrapper.masks['mask_r']
+        dtdz = np.full_like(mask,np.nan)
+
+        # dtdz from minlev to maxlev
+        if depth is None or depth<=0:
+            dtdz = np.tile(pv,(maxlev-minlev,1,1))
+            dtdz[:,1:-1,1:-1] = self.zetak(tindex,minlev=minlev,maxlev=maxlev)
+        # dtdz on a level
+        elif depth > 0:
+            dtdz[1:-1,1:-1] = self.zetak(tindex,minlev=int(depth)-2,maxlev=int(depth-1)) 
+        return dtdz
+
+    def dtdz(self,tindex, minlev=None, maxlev=None):
+
+        #
+        # 3D variables
+        #
+        ssh = self.variables['ssh'].isel(t=tindex).values
+        dz = self.wrapper.scoord2dz_r(ssh, alpha=0., beta=0)[minlev:maxlev+1,:,:]
+        t = self.variables['temp'].isel(t=tindex, z_r=slice(minlev,maxlev+1))
+        dtdz = npdiff(t,axis=0) / (0.5*(dz[:-1,:,:]+dz[1:,:,:]))
 
     def zslice(self,var,mask,z,depth,findlev=False):
         """
