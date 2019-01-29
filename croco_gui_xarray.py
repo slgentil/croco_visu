@@ -21,6 +21,7 @@ from matplotlib import colors
 from matplotlib import animation
 from matplotlib.widgets  import RectangleSelector
 from CrocoXarray import Croco
+from derived_variables import get_pv, get_zetak, get_dtdz
 from myplot import plotCurv, mypcolor
 
 wildcard = "Netcdf Files (*.nc)|*.nc"
@@ -897,9 +898,14 @@ class CrocoGui(wx.Frame):
                 y = np.zeros_like(x)
                 for it in range(len(x)):
                     if 'pv' in self.variableName:
-                        y[it] = self.croco.get_pv(it, depth=self.levelIndex)[self.latIndex,self.lonIndex]
-                    if self.variableName == 'zeta_k':
-                        y[it] = self.croco.get_zetak(it, depth=self.levelIndex,typ=self.variableName)[self.latIndex,self.lonIndex]
+                        y[it] = get_pv(self.croco,it, depth=self.levelIndex,typ=self.variableName)\
+                                [self.latIndex,self.lonIndex]
+                    elif self.variableName == 'zeta_k':
+                        y[it] = get_zetak(self.croco,it, depth=self.levelIndex)\
+                        	    [self.latIndex,self.lonIndex]
+                    elif self.variableName == 'dtdz':
+                        y[it] = get_dtdz(self.croco,it, depth=self.levelIndex)\
+                        	    [self.latIndex,self.lonIndex]
 
             title="{:s}, Lon={:4.1f}, Lat={:4.1f}, Level={:4.0f}".\
                 format(self.variableName,self.lon,self.lat, self.depth) 
@@ -935,25 +941,37 @@ class CrocoGui(wx.Frame):
                     minlev,maxlev = self.croco.zslice(None,mask,z,depth,findlev=True)
                     if 'pv' in self.variableName:
                         # Compute pv between these levels
-                        pv = self.croco.get_pv(it, depth=depth, minlev=minlev, maxlev=maxlev,typ=self.variableName)
+                        var = get_pv(self.croco,it, depth=depth, minlev=minlev, maxlev=maxlev,\
+                        	   typ=self.variableName)
                         # Extract the slice of pv corresponding at the depth
                         try:
-                            pvz = self.croco.zslice(pv,mask,z[minlev:maxlev,:,:],depth)[0]
+                            varz = self.croco.zslice(var,mask,z[minlev:maxlev,:,:],depth)[0]
                         except:
                             print("Not enough points")
                             pass
-                        y[it]=pvz[self.latIndex,self.lonIndex]
+                        y[it]=varz[self.latIndex,self.lonIndex]
 
-                    if self.variableName == 'zeta_k':
+                    elif self.variableName == 'zeta_k':
                         # Compute pv between these levels
-                        pv = self.croco.get_zetak(it, depth=depth, minlev=minlev, maxlev=maxlev)
+                        var = get_zetak(self.croco,it, depth=depth, minlev=minlev, maxlev=maxlev)
                         # Extract the slice of pv corresponding at the depth
                         try:
-                            pvz = self.croco.zslice(pv,mask,z[minlev:maxlev,:,:],depth)[0]
+                            varz = self.croco.zslice(var,mask,z[minlev:maxlev,:,:],depth)[0]
                         except:
                             print("Not enough points")
                             pass
-                        y[it]=pvz[self.latIndex,self.lonIndex]
+                        y[it]=varz[self.latIndex,self.lonIndex]
+
+                    elif self.variableName == 'dtdz':
+                        # Compute pv between these levels
+                        var = get_dtdz(self.croco,it, depth=depth, minlev=minlev, maxlev=maxlev)
+                        # Extract the slice of pv corresponding at the depth
+                        try:
+                            varz = self.croco.zslice(var,mask,z[minlev:maxlev,:,:],depth)[0]
+                        except:
+                            print("Not enough points")
+                            pass
+                        y[it]=varz[self.latIndex,self.lonIndex]
 
             title="{:s}, Lon={:4.1f}, Lat={:4.1f}, depth={:4.1f}".\
                 format(self.variableName,self.lon,self.lat,depth)
@@ -996,13 +1014,19 @@ class CrocoGui(wx.Frame):
         elif self.variableName in self.croco.ListOfDerived:
             if 'pv' in self.variableName:
                 x = np.full_like(z, np.nan)
-                pv = self.croco.get_pv(self.timeIndex, minlev=0, maxlev=self.croco.wrapper.N-1,typ=self.variableName)
-                x[1:] = pv[:,self.latIndex,self.lonIndex]
+                var = get_pv(self.croco,self.timeIndex, minlev=0, maxlev=self.croco.wrapper.N-1,typ=self.variableName)
+                x[1:] = var[:,self.latIndex,self.lonIndex]
 
-            if self.variableName == 'zeta_k':
+            elif self.variableName == 'zeta_k':
                 x = np.full_like(z, np.nan)
-                pv = self.croco.get_zetak(self.timeIndex, minlev=0, maxlev=self.croco.wrapper.N-1)
-                x[1:] = pv[:,self.latIndex,self.lonIndex]
+                var = get_zetak(self.croco,self.timeIndex, minlev=0, maxlev=self.croco.wrapper.N-1)
+                x[1:] = var[:,self.latIndex,self.lonIndex]
+
+            elif self.variableName == 'dtdz':
+                x = np.full_like(z, np.nan)
+                var = get_dtdz(self.croco,self.timeIndex, minlev=0, maxlev=self.croco.wrapper.N-1)
+                x[1:] = var[:,self.latIndex,self.lonIndex]
+
         # Plot the profile
         self.profileFrame = ProfileFrame(croco=self.croco, \
             x=x, y=z, \
@@ -1122,11 +1146,14 @@ class CrocoGui(wx.Frame):
 
             elif self.variableName in self.croco.ListOfDerived:
                 if 'pv' in self.variableName:
-                    pv = self.croco.get_pv(self.timeIndex, depth=depth, typ=self.variableName)
-                    self.variableXY = xr.DataArray(data=pv)
-                if self.variableName == 'zeta_k':
-                    pv = self.croco.get_zetak(self.timeIndex, depth=depth)
-                    self.variableXY = xr.DataArray(data=pv)
+                    var = get_pv(self.croco,self.timeIndex, depth=depth, typ=self.variableName)
+                    self.variableXY = xr.DataArray(data=var)
+                elif self.variableName == 'zeta_k':
+                    var = get_zetak(self.croco,self.timeIndex, depth=depth)
+                    self.variableXY = xr.DataArray(data=var)
+                elif self.variableName == 'dtdz':
+                    var = get_dtdz(self.croco,self.timeIndex, depth=depth)
+                    self.variableXY = xr.DataArray(data=var)
             else:
                 print("unknown variable ",self.variableName)
                 return
@@ -1157,23 +1184,31 @@ class CrocoGui(wx.Frame):
             # Derived variable
             elif self.variableName in self.croco.ListOfDerived:
                 if 'pv' in self.variableName:
-                    pv = self.croco.get_pv(self.timeIndex, depth=depth, minlev=minlev, maxlev=maxlev,typ=self.variableName)
+                    var = get_pv(self.croco,self.timeIndex, depth=depth, minlev=minlev, maxlev=maxlev,typ=self.variableName)
                     try:
-                        zslice = self.croco.zslice(pv,mask,z[minlev:maxlev,:,:],depth)[0]
+                        zslice = self.croco.zslice(var,mask,z[minlev:maxlev,:,:],depth)[0]
                         self.variableXY = xr.DataArray(data=zslice)
                     except:
                         print("Not enough points")
                         pass
         
-                if self.variableName== 'zeta_k':
-                    pv = self.croco.get_zetak(self.timeIndex, depth=depth, minlev=minlev, maxlev=maxlev)
+                elif self.variableName== 'zeta_k':
+                    var = get_zetak(self.croco,self.timeIndex, depth=depth, minlev=minlev, maxlev=maxlev)
                     try:
-                        zslice = self.croco.zslice(pv,mask,z[minlev:maxlev,:,:],depth)[0]
+                        zslice = self.croco.zslice(var,mask,z[minlev:maxlev,:,:],depth)[0]
                         self.variableXY = xr.DataArray(data=zslice)
                     except:
                         print("Not enough points")
                         pass
         
+                elif self.variableName== 'dtdz':
+                    var = get_dtdz(self.croco,self.timeIndex, depth=depth, minlev=minlev, maxlev=maxlev)
+                    try:
+                        zslice = self.croco.zslice(var,mask,z[minlev:maxlev,:,:],depth)[0]
+                        self.variableXY = xr.DataArray(data=zslice)
+                    except:
+                        print("Not enough points")
+                        pass
         # Draw the new self.variableXY  
         self.variableXY.values = mask*self.variableXY.values             
         self.drawxy(setlim=setlim)
@@ -1245,10 +1280,13 @@ class CrocoGui(wx.Frame):
                 variable = self.croco.create_DataArray(data=section, dimstyp='xzt')
                 for it in range(len(x)):
                     if 'pv' in self.variableName:
-                        variable[it,1:,:] = self.croco.get_pv(self.timeIndex, minlev=0, maxlev=self.croco.wrapper.N-1,typ=self.variableName)[:,self.latIndex,:]
+                        variable[it,1:,:] = get_pv(self.croco,self.timeIndex, minlev=0, maxlev=self.croco.wrapper.N-1,typ=self.variableName)[:,self.latIndex,:]
                 
-                    if self.variableName == 'zeta_k':
-                        variable[it,1:,:] = self.croco.get_zetak(self.timeIndex, minlev=0, maxlev=self.croco.wrapper.N-1)[:,self.latIndex,:]
+                    elif self.variableName == 'zeta_k':
+                        variable[it,1:,:] = get_zetak(self.croco,self.timeIndex, minlev=0, maxlev=self.croco.wrapper.N-1)[:,self.latIndex,:]
+                
+                    elif self.variableName == 'dtdz':
+                        variable[it,1:,:] = get_dtdz(self.croco,self.timeIndex, minlev=0, maxlev=self.croco.wrapper.N-1)[:,self.latIndex,:]
                 
             # Get Longitude coordinates
             x = self.croco.get_coord(self.variableName, direction='x')
@@ -1287,10 +1325,13 @@ class CrocoGui(wx.Frame):
                 variable = self.croco.create_DataArray(data=section, dimstyp='yzt')
                 for it in range(len(x)):
                     if 'pv' in self.variableName:
-                        variable[it,1:,:] = self.croco.get_pv(self.timeIndex, minlev=0, maxlev=self.croco.wrapper.N-1,typ=self.variableName)[:,:,self.lonIndex]
+                        variable[it,1:,:] = get_pv(self.croco,self.timeIndex, minlev=0, maxlev=self.croco.wrapper.N-1,typ=self.variableName)[:,:,self.lonIndex]
                 
-                    if self.variableName == 'zeta_k':
-                        variable[it,1:,:] = self.croco.get_zetak(self.timeIndex, minlev=0, maxlev=self.croco.wrapper.N-1)[:,:,self.lonIndex]
+                    elif self.variableName == 'zeta_k':
+                        variable[it,1:,:] = get_zetak(self.croco,self.timeIndex, minlev=0, maxlev=self.croco.wrapper.N-1)[:,:,self.lonIndex]
+                
+                    elif self.variableName == 'dtdz':
+                        variable[it,1:,:] = get_dtdz(self.croco,self.timeIndex, minlev=0, maxlev=self.croco.wrapper.N-1)[:,:,self.lonIndex]
                 
             # Get Latitude coordinates
             x = self.croco.get_coord(self.variableName, direction='y')
