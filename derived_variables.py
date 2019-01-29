@@ -18,7 +18,8 @@ import numpy as np
 # Ertel Potential vorticity
 
 
-def get_pv(croco,tindex,depth=None, minlev=None, maxlev=None, typ='ijk'):
+def get_pv(croco,tindex,depth=None, minlev=None, maxlev=None, \
+	       lonindex=None, latindex=None, typ='ijk'):
 
     mask = croco.wrapper.masks['mask_r']
     pv = np.full_like(mask,np.nan)
@@ -156,11 +157,11 @@ def calc_ertel(croco,tindex, minlev=None, maxlev=None, typ='ijk'):
         #  Compute d(w)/d(x) at horizontal U-points and vertical RHO-points
         #
         dxm1 = 0.5 * (pm[:,:,1:]+pm[:,:,:-1])
-        dwdx = np.diff(w,axis=2)*(0.5*(dxm1[:-1,:,:]+dxm1[1:,:,:]))
+        dwdx = np.diff(w,axis=2)*dxm1
         #
         #  Compute d(rho)/d(eta) at horizontal V-points and vertical RHO-points
         #
-        dym1 = 0.5 * (pn[:,:-1,:]+pn[:,:-1,:])
+        dym1 = 0.5 * (pn[:,1:,:]+pn[:,:-1,:])
         drhodeta = np.diff(rho,axis=1) * dym1
         #
         #  Add in term 3 contribution to Ertel potential vorticity at horizontal RHO-points and
