@@ -15,11 +15,12 @@ import scipy.io
 import netCDF4 as netcdf
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigureCanvas
+from matplotlib.backends.backend_wxagg import NavigationToolbar2WxAgg as NavigationToolbar
 import matplotlib as mpl
 from matplotlib.figure import Figure
 from matplotlib import colors
 from matplotlib import animation
-from matplotlib.widgets  import RectangleSelector
+# from matplotlib.widgets  import RectangleSelector
 from CrocoXarray import Croco
 from derived_variables import get_pv, get_zetak, get_dtdz
 from myplot import plotCurv, mypcolor
@@ -61,13 +62,16 @@ class SectionFrame(wx.Frame):
         # and a few controls
         self.figure = Figure()
         self.axes = self.figure.add_axes([0,0,1,1])
-        self.canvas = FigureCanvas(self.panel, -1, self.figure)
+        self.canvas = FigureCanvas(self.panel, -1, self.figure)       
+        self.toolbar = NavigationToolbar(self.canvas)
+        self.toolbar.Hide()
 
         self.TimeLabel = wx.StaticText(self.panel,-1,label="Time",style = wx.ALIGN_CENTER)
         self.TimeTxt = wx.TextCtrl(self.panel, wx.ID_ANY, " ", style=wx.TE_CENTRE|wx.TE_PROCESS_ENTER)
-        self.ZoomInBtn = wx.Button(self.panel, wx.ID_ANY, "Zoom In")
-        self.ZoomOutBtn = wx.Button(self.panel, wx.ID_ANY, "Zoom Out")
-        self.PrintBtn = wx.Button(self.panel, wx.ID_ANY, "Print")
+        self.ZoomBtn = wx.Button(self.panel, wx.ID_ANY, "Zoom")
+        self.PanBtn = wx.Button(self.panel, wx.ID_ANY, "Pan")
+        self.HomeBtn = wx.Button(self.panel, wx.ID_ANY, "Home")
+        self.SaveBtn = wx.Button(self.panel, wx.ID_ANY, "Save")
 
         self.AnimationBtn = wx.Button(self.panel, wx.ID_ANY, "Animation")
         self.startTimeTxt = wx.TextCtrl(self.panel, wx.ID_ANY, "1", style=wx.TE_CENTRE|wx.TE_PROCESS_ENTER)
@@ -85,9 +89,10 @@ class SectionFrame(wx.Frame):
         self.AnimationBtn.Bind(wx.EVT_BUTTON, self.onAnimationBtn)
         self.startTimeTxt.Bind(wx.EVT_TEXT_ENTER, self.onstartTimeTxt)
         self.endTimeTxt.Bind(wx.EVT_TEXT_ENTER, self.onendTimeTxt)
-        self.ZoomInBtn.Bind(wx.EVT_BUTTON, self.onZoomInBtn)
-        self.ZoomOutBtn.Bind(wx.EVT_BUTTON, self.onZoomOutBtn)
-        self.PrintBtn.Bind(wx.EVT_BUTTON, self.onPrintBtn)
+        self.ZoomBtn.Bind(wx.EVT_BUTTON, self.onZoomBtn)
+        self.PanBtn.Bind(wx.EVT_BUTTON, self.onPanBtn)
+        self.HomeBtn.Bind(wx.EVT_BUTTON, self.onHomeBtn)
+        self.SaveBtn.Bind(wx.EVT_BUTTON, self.onSaveBtn)
         self.ResetColorBtn.Bind(wx.EVT_BUTTON, self.onResetColorBtn)
         self.MinColorTxt.Bind(wx.EVT_TEXT_ENTER, self.onMinColorTxt)
         self.MaxColorTxt.Bind(wx.EVT_TEXT_ENTER, self.onMaxColorTxt)
@@ -145,9 +150,10 @@ class SectionFrame(wx.Frame):
 
         timeSizer.Add(self.TimeLabel,0, wx.ALL, 5)
         timeSizer.Add(self.TimeTxt,0, wx.ALL, 5)
-        timeSizer.Add(self.ZoomInBtn,0, wx.ALL, 5)
-        timeSizer.Add(self.ZoomOutBtn,0, wx.ALL, 5)
-        timeSizer.Add(self.PrintBtn,0, wx.ALL, 5)
+        timeSizer.Add(self.ZoomBtn,0, wx.ALL, 5)
+        timeSizer.Add(self.PanBtn,0, wx.ALL, 5)
+        timeSizer.Add(self.HomeBtn,0, wx.ALL, 5)
+        timeSizer.Add(self.SaveBtn,0, wx.ALL, 5)
 
         buttonsSizer.Add(self.AnimationBtn,0, wx.ALL, 5)
         buttonsSizer.Add(self.startTimeTxt,0, wx.ALL, 5)
@@ -282,28 +288,36 @@ class SectionFrame(wx.Frame):
         self.updateVariableZ(setlim=False)
 
     # Event handler for zoom
-    def onZoomInBtn(self,event):    
+    def onZoomBtn(self,event):    
         """Event handler for the button click Zoom in button"""   
-        self.figure.RS.set_active(True)
+        # self.figure.RS.set_active(True)
+        self.toolbar.zoom()
 
-    def onZoomOutBtn(self,event):
+    # Event handler for zoom
+    def onPanBtn(self,event):    
+        """Event handler for the button click Zoom in button"""   
+        self.toolbar.pan()
+
+    def onHomeBtn(self,event):
         """Event handler for the button click Zoom out button""" 
         self.xlim = [np.min(self.x),np.max(self.x)]
         self.ylim = [np.min(self.y),np.max(self.y)]
-        self.drawz(setlim=False)
+        # self.drawz(setlim=False)
+        self.toolbar.home()
 
     # Event handler for Print
-    def onPrintBtn(self,event):
+    def onSaveBtn(self,event):
         """Event handler for the button click Print button""" 
-        printDir = self.croco.startDir+"/Figures_" + self.croco.get_run_name()+"/"
-        if not os.path.isdir(printDir):
-                os.mkdir(printDir)
-        # time = str(self.croco.wrapper._get_date(self.timeIndex))
-        filename = self.title.replace(',','_').replace(" ", "")+".png"
-        # filename = "{:s}_{:s}{:4.1f}_Time{:s}.png".format(self.variableName,self.slice,self.sliceCoord, \
-        #     time).replace(" ", "")
-        os.system('rm -rf '+printDir+filename)
-        self.figure.savefig(printDir+filename, dpi=self.figure.dpi)
+        # printDir = self.croco.startDir+"/Figures_" + self.croco.get_run_name()+"/"
+        # if not os.path.isdir(printDir):
+        #         os.mkdir(printDir)
+        # # time = str(self.croco.wrapper._get_date(self.timeIndex))
+        # filename = self.title.replace(',','_').replace(" ", "")+".png"
+        # # filename = "{:s}_{:s}{:4.1f}_Time{:s}.png".format(self.variableName,self.slice,self.sliceCoord, \
+        # #     time).replace(" ", "")
+        # os.system('rm -rf '+printDir+filename)
+        # self.figure.savefig(printDir+filename, dpi=self.figure.dpi)
+        self.toolbar.save_figure(None)
 
     # Event handler for Color setup
     def onResetColorBtn(self,event):
@@ -394,17 +408,21 @@ class ProfileFrame(wx.Frame):
 
         # and a few controls
         self.figure = Figure()
-        self.canvas = FigureCanvas(self.panel, -1, self.figure)
+        self.canvas = FigureCanvas(self.panel, -1, self.figure)       
+        self.toolbar = NavigationToolbar(self.canvas)
+        self.toolbar.Hide()
 
-        self.ZoomInBtn = wx.Button(self.panel, wx.ID_ANY, "Zoom In")
-        self.ZoomOutBtn = wx.Button(self.panel, wx.ID_ANY, "Zoom Out")
-        self.PrintBtn = wx.Button(self.panel, wx.ID_ANY, "Print")
+        self.ZoomBtn = wx.Button(self.panel, wx.ID_ANY, "Zoom")
+        self.HomeBtn = wx.Button(self.panel, wx.ID_ANY, "Home")
+        self.PanBtn = wx.Button(self.panel, wx.ID_ANY, "Pan")
+        self.SaveBtn = wx.Button(self.panel, wx.ID_ANY, "Save")
 
 
         # bind the menu event to an event handler
-        self.ZoomInBtn.Bind(wx.EVT_BUTTON, self.onZoomInBtn)
-        self.ZoomOutBtn.Bind(wx.EVT_BUTTON, self.onZoomOutBtn)
-        self.PrintBtn.Bind(wx.EVT_BUTTON, self.onPrintBtn)
+        self.ZoomBtn.Bind(wx.EVT_BUTTON, self.onZoomBtn)
+        self.HomeBtn.Bind(wx.EVT_BUTTON, self.onHomeBtn)
+        self.PanBtn.Bind(wx.EVT_BUTTON, self.onPanBtn)
+        self.SaveBtn.Bind(wx.EVT_BUTTON, self.onSaveBtn)
 
         self.showPosition = self.CreateStatusBar(2)
         self.showPosition.SetStatusText("x=	  , y=  ",1)
@@ -432,9 +450,10 @@ class ProfileFrame(wx.Frame):
 
 
         canvasSizer.Add(self.canvas, 0, wx.ALL, 5)
-        buttonsSizer.Add(self.ZoomInBtn,0, wx.ALL, 5)
-        buttonsSizer.Add(self.ZoomOutBtn,0, wx.ALL, 5)
-        buttonsSizer.Add(self.PrintBtn,0, wx.ALL, 5)
+        buttonsSizer.Add(self.ZoomBtn,0, wx.ALL, 5)
+        buttonsSizer.Add(self.PanBtn,0, wx.ALL, 5)
+        buttonsSizer.Add(self.HomeBtn,0, wx.ALL, 5)
+        buttonsSizer.Add(self.SaveBtn,0, wx.ALL, 5)
 
         topSizer.Add(canvasSizer, 0, wx.CENTER)
         topSizer.Add(buttonsSizer, 0, wx.ALL|wx.EXPAND, 5)
@@ -459,22 +478,30 @@ class ProfileFrame(wx.Frame):
             self.showPosition.SetStatusText(
                 "x={:5.1f}  y={:5.1f}".format(event.xdata, event.ydata),1)
 
-    def onZoomInBtn(self,event): 
+    def onZoomBtn(self,event): 
         """Event handler for the button click Zoom in button"""         
-        self.figure.RS.set_active(True)
+        # self.figure.RS.set_active(True)
+        self.toolbar.zoom()
 
-    def onZoomOutBtn(self,event):
+    def onHomeBtn(self,event):
         """Event handler for the button click Zoom out button"""   
-        self.draw()
+        # self.draw()
+        self.toolbar.home()
 
-    def onPrintBtn(self,event):
+    def onPanBtn(self,event):
+        """Event handler for the button click Zoom out button"""   
+        # self.draw()
+        self.toolbar.pan()
+
+    def onSaveBtn(self,event):
         """Event handler for the button click Print button""" 
-        printDir = self.croco.startDir+"/Figures_" + self.croco.get_run_name()+"/"
-        if not os.path.isdir(printDir):
-                os.mkdir(printDir)
-        filename = self.title.replace(",", "_").replace(" ","")+".png"
-        os.system('rm -Rf '+printDir+filename)
-        self.figure.savefig(printDir+filename, dpi=self.figure.dpi)
+        # printDir = self.croco.startDir+"/Figures_" + self.croco.get_run_name()+"/"
+        # if not os.path.isdir(printDir):
+        #         os.mkdir(printDir)
+        # filename = self.title.replace(",", "_").replace(" ","")+".png"
+        # os.system('rm -Rf '+printDir+filename)
+        # self.figure.savefig(printDir+filename, dpi=self.figure.dpi)
+        self.toolbar.save_figure(None)
 
     #------------- Methods of class
 
@@ -482,7 +509,7 @@ class ProfileFrame(wx.Frame):
         """ plot the current variable in the canvas """
 
         self.canvas.mpl_connect('motion_notify_event', self.ShowPosition)
-        
+
         self.x = ma.masked_invalid(self.x)
         self.y = ma.masked_invalid(self.y)
         if setlim:
@@ -549,14 +576,17 @@ class CrocoGui(wx.Frame):
 
         self.PanelCanvas = wx.Panel(self.Panel, -1)
         self.figure = Figure(figsize=(figsize[0],figsize[1]))
-        self.canvas = FigureCanvas(self.PanelCanvas, -1, self.figure)
+        self.canvas = FigureCanvas(self.PanelCanvas, -1, self.figure)        
+        self.toolbar = NavigationToolbar(self.canvas)
+        self.toolbar.Hide()
 
         self.AnimationBtn = wx.Button(self.Panel, wx.ID_ANY, "Animation")
         self.startTimeTxt = wx.TextCtrl(self.Panel, wx.ID_ANY, "1", style=wx.TE_CENTRE|wx.TE_PROCESS_ENTER)
         self.endTimeTxt = wx.TextCtrl(self.Panel, wx.ID_ANY, "1", style=wx.TE_CENTRE|wx.TE_PROCESS_ENTER)
-        self.ZoomInBtn = wx.Button(self.Panel, wx.ID_ANY, "Zoom In")
-        self.ZoomOutBtn = wx.Button(self.Panel, wx.ID_ANY, "Zoom Out")
-        self.PrintBtn = wx.Button(self.Panel, wx.ID_ANY, "Print")
+        self.ZoomBtn = wx.Button(self.Panel, wx.ID_ANY, "Zoom")        
+        self.PanBtn = wx.Button(self.Panel, wx.ID_ANY, "Pan")
+        self.HomeBtn = wx.Button(self.Panel, wx.ID_ANY, "Home")
+        self.SaveBtn = wx.Button(self.Panel, wx.ID_ANY, "Save")
 
         self.ResetColorBtn = wx.Button(self.Panel, wx.ID_ANY, "Reset Color")
         self.MinColorTxt = wx.TextCtrl(self.Panel, wx.ID_ANY, "Min Color", style=wx.TE_CENTRE|wx.TE_PROCESS_ENTER)
@@ -569,6 +599,7 @@ class CrocoGui(wx.Frame):
         self.ResetColorBtn.Bind(wx.EVT_BUTTON, self.onResetColorBtn)
         self.MinColorTxt.Bind(wx.EVT_TEXT_ENTER, self.onMinColorTxt)
         self.MaxColorTxt.Bind(wx.EVT_TEXT_ENTER, self.onMaxColorTxt)
+        self.PanBtn.Bind(wx.EVT_BUTTON, self.onPanBtn)
         self.TimeMinusBtn.Bind(wx.EVT_BUTTON, self.onTimeMinusBtn)
         self.TimeTxt.Bind(wx.EVT_TEXT_ENTER, self.onTimeTxt)
         self.TimePlusBtn.Bind(wx.EVT_BUTTON, self.onTimePlusBtn)
@@ -585,9 +616,10 @@ class CrocoGui(wx.Frame):
         self.AnimationBtn.Bind(wx.EVT_BUTTON, self.onAnimationBtn)
         self.startTimeTxt.Bind(wx.EVT_TEXT_ENTER, self.onstartTimeTxt)
         self.endTimeTxt.Bind(wx.EVT_TEXT_ENTER, self.onendTimeTxt)
-        self.ZoomInBtn.Bind(wx.EVT_BUTTON, self.onZoomInBtn)
-        self.ZoomOutBtn.Bind(wx.EVT_BUTTON, self.onZoomOutBtn)
-        self.PrintBtn.Bind(wx.EVT_BUTTON, self.onPrintBtn)
+        self.ZoomBtn.Bind(wx.EVT_BUTTON, self.onZoomBtn)
+        self.PanBtn.Bind(wx.EVT_BUTTON, self.onPanBtn)
+        self.HomeBtn.Bind(wx.EVT_BUTTON, self.onHomeBtn)
+        self.SaveBtn.Bind(wx.EVT_BUTTON, self.onSaveBtn)
 
         self.showPosition = self.CreateStatusBar(2)
         self.showPosition.SetStatusText("x=	  , y=  ",1)
@@ -601,6 +633,7 @@ class CrocoGui(wx.Frame):
 
         self.openCroco()
 
+
     def __do_layout(self):
 
         """
@@ -612,7 +645,6 @@ class CrocoGui(wx.Frame):
         rightSizer        = wx.BoxSizer(wx.VERTICAL)
         # openFileSizer   = wx.BoxSizer(wx.VERTICAL)
         chooseVariablesSizer = wx.BoxSizer(wx.HORIZONTAL)
-        colorSizer      = wx.BoxSizer(wx.HORIZONTAL)
         labelTimeSizer  = wx.BoxSizer(wx.HORIZONTAL)
         labelMinMaxTimeSizer  = wx.BoxSizer(wx.HORIZONTAL)
         timeSizer       = wx.BoxSizer(wx.HORIZONTAL)
@@ -627,6 +659,8 @@ class CrocoGui(wx.Frame):
         profileSizer   = wx.BoxSizer(wx.HORIZONTAL)
         canvasSizer     = wx.BoxSizer(wx.VERTICAL)
         buttonsSizer    = wx.BoxSizer(wx.HORIZONTAL)
+        animSizer       = wx.BoxSizer(wx.HORIZONTAL)
+        colorSizer      = wx.BoxSizer(wx.HORIZONTAL)
 
         # openFileSizer.Add(self.OpenFileBtn, 0, wx.ALL, 5)
         # openFileSizer.Add(self.OpenFileTxt, 1, wx.ALL|wx.EXPAND, 5)
@@ -659,17 +693,19 @@ class CrocoGui(wx.Frame):
         profileSizer.Add(self.VerticalProfileBtn, 0, wx.ALL, 5)
 
         canvasSizer.Add(self.PanelCanvas, 1, wx.EXPAND , 5)
-        buttonsSizer.Add(self.AnimationBtn,0, wx.ALL, 5)
-        buttonsSizer.Add(self.startTimeTxt,1, wx.ALL, 5)
-        buttonsSizer.Add(self.endTimeTxt,1, wx.ALL, 5)
-        buttonsSizer.Add(self.ZoomInBtn,0, wx.ALL, 5)
-        buttonsSizer.Add(self.ZoomOutBtn,0, wx.ALL, 5)
-        buttonsSizer.Add(self.PrintBtn,0, wx.ALL, 5)
+
+        buttonsSizer.Add(self.ZoomBtn,0, wx.ALL, 5)
+        buttonsSizer.Add(self.PanBtn,0, wx.ALL, 5)
+        buttonsSizer.Add(self.HomeBtn,0, wx.ALL, 5)
+        buttonsSizer.Add(self.SaveBtn,0, wx.ALL, 5)
+
+        animSizer.Add(self.AnimationBtn,0, wx.ALL, 5)
+        animSizer.Add(self.startTimeTxt,0, wx.ALL, 5)
+        animSizer.Add(self.endTimeTxt,0, wx.ALL, 5)
 
         colorSizer.Add(self.ResetColorBtn, 0, wx.ALL, 5)
         colorSizer.Add(self.MinColorTxt, 0, wx.ALL, 5)
         colorSizer.Add(self.MaxColorTxt, 0, wx.ALL, 5)
-        # colorSizer.Add(self.Position, 0, wx.ALL, 5)
 
         # leftSizer.Add(openFileSizer, 0,wx.ALL|wx.EXPAND, 5 )
         leftSizer.Add(chooseVariablesSizer, 0, wx.ALL|wx.EXPAND, 5)
@@ -687,6 +723,7 @@ class CrocoGui(wx.Frame):
         leftSizer.Add(profileSizer, 0, wx.ALL|wx.EXPAND, 5)
         rightSizer.Add(canvasSizer, 0, wx.EXPAND)
         rightSizer.Add(buttonsSizer, 0, wx.ALL|wx.EXPAND, 5)
+        rightSizer.Add(animSizer, 0, wx.ALL|wx.EXPAND, 5)
         rightSizer.Add(colorSizer, 0, wx.ALL|wx.EXPAND, 5)
 
         topSizer.Add(leftSizer, 0,wx.ALL|wx.EXPAND, 5 )
@@ -695,7 +732,6 @@ class CrocoGui(wx.Frame):
         self.Panel.SetSizer(topSizer)
         self.Panel.SetAutoLayout(True)
         topSizer.Fit(self)
-
 
         self.Layout()
 
@@ -797,6 +833,9 @@ class CrocoGui(wx.Frame):
         self.MinColorTxt.SetValue('%.2E' % self.clim[0])
         self.MaxColorTxt.SetValue('%.2E' % self.clim[1])
         self.drawxy(setlim=False)
+
+    def onPanBtn(self,event):
+        self.toolbar.pan()
 
     def onMinColorTxt(self,event):
         self.clim[0] = float(self.MinColorTxt.GetValue())
@@ -1119,11 +1158,17 @@ class CrocoGui(wx.Frame):
         self.endTime = self.croco.wrapper._get_date(self.endTimeIndex)
         self.endTimeTxt.SetValue(str(self.endTime))
 
-    def onZoomInBtn(self,event):
+    def onZoomBtn(self,event):
         # Activate the selection rectangle to zoom
-        self.figure.RS.set_active(True)
+        # self.figure.RS.set_active(True)       
+        self.toolbar.zoom()
 
-    def onZoomOutBtn(self,event):
+    def onPanBtn(self,event):
+        # Activate the selection rectangle to zoom
+        # self.figure.RS.set_active(True)       
+        self.toolbar.pan()
+
+    def onHomeBtn(self,event):
         # self.xlim = [np.min(self.croco.wrapper.coords['lon_r'].values), \
         #              np.max(self.croco.wrapper.coords['lon_r'].values)]
         # self.ylim = [np.min(self.croco.wrapper.coords['lat_r'].values), \
@@ -1132,18 +1177,20 @@ class CrocoGui(wx.Frame):
                      np.max(self.croco.wrapper.coords['lon_r'])]
         self.ylim = [np.min(self.croco.wrapper.coords['lat_r']), \
                      np.max(self.croco.wrapper.coords['lat_r'])]
-        self.drawxy(setlim=False)
+        # self.drawxy(setlim=False)        
+        self.toolbar.home()
 
-    def onPrintBtn(self,event):
-        printDir = self.croco.startDir+"/Figures_" + self.croco.get_run_name()+"/"
-        if not os.path.isdir(printDir):
-                os.mkdir(printDir)
-        # time = str(self.croco.wrapper._get_date(self.timeIndex))
-        # filename = "{:s}_Depth={:4.0f}_Time{:s}".format(self.variableName,self.depth,time)
-        # filename=filename.replace(" ","")+".png"
-        filename = self.title.replace(',','_').replace(" ", "")+".png"
-        os.system('rm -rf '+printDir+filename)
-        self.figure.savefig(printDir+filename, dpi=self.figure.dpi)
+    def onSaveBtn(self,event):
+        # printDir = self.croco.startDir+"/Figures_" + self.croco.get_run_name()+"/"
+        # if not os.path.isdir(printDir):
+        #         os.mkdir(printDir)
+        # # time = str(self.croco.wrapper._get_date(self.timeIndex))
+        # # filename = "{:s}_Depth={:4.0f}_Time{:s}".format(self.variableName,self.depth,time)
+        # # filename=filename.replace(" ","")+".png"
+        # filename = self.title.replace(',','_').replace(" ", "")+".png"
+        # os.system('rm -rf '+printDir+filename)
+        # self.figure.savefig(printDir+filename, dpi=self.figure.dpi)
+        self.toolbar.save_figure(None)
 
 
     #------------- Methods of class
