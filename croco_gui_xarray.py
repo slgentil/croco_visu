@@ -751,15 +751,18 @@ class CrocoGui(wx.Frame):
     def onCrocoVariableChoice(self, event):
         ''' Choose variable from croco file to plot '''
         self.variableName = self.CrocoVariableChoice.GetString(self.CrocoVariableChoice.GetSelection())
+        self.DerivedVariableChoice.SetSelection(0)
         self.updateVariableXY()
 
     def onDerivedVariableChoice(self, event):
         ''' Choose a computed variable to plot '''
         self.variableName = self.DerivedVariableChoice.GetString(self.DerivedVariableChoice.GetSelection())
+        self.CrocoVariableChoice.SetSelection(0)
         self.updateVariableXY()
 
     def onResetColorBtn(self,event):
-        self.clim = [np.min(self.variableXY.values),np.max(self.variableXY.values)]
+        variableXY = ma.masked_invalid(self.variableXY.values)
+        self.clim = [np.min(variableXY),np.max(variableXY)]
         self.MinColorTxt.SetValue('%.2E' % self.clim[0])
         self.MaxColorTxt.SetValue('%.2E' % self.clim[1])
         self.drawxy(setlim=False)
@@ -1014,18 +1017,24 @@ class CrocoGui(wx.Frame):
         elif self.variableName in self.croco.ListOfDerived:
             if 'pv' in self.variableName:
                 x = np.full_like(z, np.nan)
-                var = get_pv(self.croco,self.timeIndex, minlev=0, maxlev=self.croco.wrapper.N-1,typ=self.variableName)
-                x[1:] = var[:,self.latIndex,self.lonIndex]
+                var = get_pv(self.croco,self.timeIndex, \
+                	minlev=0, maxlev=self.croco.wrapper.N-1,\
+                	lonindex=self.lonIndex, typ=self.variableName)
+                x[1:] = var[:,self.latIndex]
 
             elif self.variableName == 'zeta_k':
                 x = np.full_like(z, np.nan)
-                var = get_zetak(self.croco,self.timeIndex, minlev=0, maxlev=self.croco.wrapper.N-1)
-                x[1:] = var[:,self.latIndex,self.lonIndex]
+                var = get_zetak(self.croco,self.timeIndex, \
+                	minlev=0, maxlev=self.croco.wrapper.N-1,\
+                	lonindex=self.lonIndex,)
+                x[1:] = var[:,self.latIndex]
 
             elif self.variableName == 'dtdz':
                 x = np.full_like(z, np.nan)
-                var = get_dtdz(self.croco,self.timeIndex, minlev=0, maxlev=self.croco.wrapper.N-1)
-                x[1:] = var[:,self.latIndex,self.lonIndex]
+                var = get_dtdz(self.croco,self.timeIndex, \
+                	minlev=0, maxlev=self.croco.wrapper.N-1,\
+                	lonindex=self.lonIndex,)
+                x[1:] = var[:,self.latIndex]
 
         # Plot the profile
         self.profileFrame = ProfileFrame(croco=self.croco, \
@@ -1127,6 +1136,12 @@ class CrocoGui(wx.Frame):
             dims = self.croco.variables[self.variableName].dims
         except:
             dims = []
+
+        # if 2D variable, reset level
+        if len(dims)==3 :
+        	depth = 120
+        	self.LevelTxt.SetValue(str(depth))
+
         mask = self.croco.wrapper.masks['mask_r']
         if "x_u" in dims:
             mask = self.croco.rho2u_2d(mask)
@@ -1228,10 +1243,6 @@ class CrocoGui(wx.Frame):
             self.maxcolor = np.max(variableXY)
             self.MaxColorTxt.SetValue('%.2E' % self.maxcolor)
             self.clim = [self.mincolor,self.maxcolor]
-            # self.xlim = [np.min(self.croco.wrapper.coords['lon_r'].values), \
-            #              np.max(self.croco.wrapper.coords['lon_r'].values)]
-            # self.ylim = [np.min(self.croco.wrapper.coords['lat_r'].values), \
-            #              np.max(self.croco.wrapper.coords['lat_r'].values)]
             self.xlim = [np.min(self.croco.wrapper.coords['lon_r']), \
                          np.max(self.croco.wrapper.coords['lon_r'])]
             self.ylim = [np.min(self.croco.wrapper.coords['lat_r']), \
@@ -1240,8 +1251,6 @@ class CrocoGui(wx.Frame):
 
         time = str(self.croco.wrapper._get_date(self.timeIndex))
         depth = float(self.LevelTxt.GetValue())
-        # lon = self.croco.wrapper.coords['lon_r'].values
-        # lat = self.croco.wrapper.coords['lat_r'].values
         lon = self.croco.wrapper.coords['lon_r']
         lat = self.croco.wrapper.coords['lat_r']
 
@@ -1263,41 +1272,48 @@ class CrocoGui(wx.Frame):
 
     def drawz(self,typSection=None):
         ''' Extract the  rigth section for the current variable and plot in a new window '''
-        ssh = self.croco.variables['ssh'].isel(t=self.timeIndex).values
 
         # Latitude section
-        if typSection == "XZ":
+        if typSection == "XZ":        
+            ssh = self.croco.variables['ssh'].isel(t=self.timeIndex,\
+            	            y_r=slice(self.latIndex-1,self.latIndex+2)).values
+
             # Variable from croco file
             if self.variableName in self.croco.ListOfVariables:
                 variable = self.croco.get_variable(self.variableName, \
                     yindex=self.latIndex)
             # Derived Variable
             elif self.variableName in self.croco.ListOfDerived:       
-                x = self.croco.wrapper.coords['time']
-                z = self.croco.wrapper.scoord2z_r(ssh, alpha=0., beta=0)[:,self.latIndex,:]
-                section = np.full_like(z,np.nan)
-                section = np.tile(section,(len(x),1,1))
-                variable = self.croco.create_DataArray(data=section, dimstyp='xzt')
-                for it in range(len(x)):
+                ntimes = self.croco.wrapper.ntimes
+                N = self.croco.wrapper.N
+                L = self.croco.wrapper.L
+                variable = self.croco.create_DataArray(data=np.zeros((ntimes,N,L)), dimstyp='xzt')
+                for it in range(ntimes):
                     if 'pv' in self.variableName:
-                        variable[it,1:,:] = get_pv(self.croco,self.timeIndex, minlev=0, maxlev=self.croco.wrapper.N-1,typ=self.variableName)[:,self.latIndex,:]
+                        variable[it,1:,:] = get_pv(self.croco,self.timeIndex, \
+                        	minlev=0, maxlev=self.croco.wrapper.N-1,\
+                        	latindex=self.latIndex, typ=self.variableName)
                 
                     elif self.variableName == 'zeta_k':
-                        variable[it,1:,:] = get_zetak(self.croco,self.timeIndex, minlev=0, maxlev=self.croco.wrapper.N-1)[:,self.latIndex,:]
+                        variable[it,1:,:] = get_zetak(self.croco,self.timeIndex, \
+                        	minlev=0, maxlev=self.croco.wrapper.N-1, \
+                        	latindex=self.latIndex)
                 
                     elif self.variableName == 'dtdz':
-                        variable[it,1:,:] = get_dtdz(self.croco,self.timeIndex, minlev=0, maxlev=self.croco.wrapper.N-1)[:,self.latIndex,:]
+                        variable[it,1:,:] = get_dtdz(self.croco,self.timeIndex, \
+                        	minlev=0, maxlev=self.croco.wrapper.N-1, \
+                        	latindex=self.latIndex)
                 
             # Get Longitude coordinates
             x = self.croco.get_coord(self.variableName, direction='x')
             x = repmat(x[self.latIndex,:].squeeze(),self.croco.wrapper.N,1)
             # Get depths coordinates
             if self.variableName=="u":
-                y = self.croco.wrapper.scoord2z_u(ssh, alpha=0., beta=0)[:,self.lonIndex,:]
+                y = np.squeeze(self.croco.wrapper.scoord2z_u(ssh, alpha=0., beta=0, latindex=self.latIndex)[:,1:-1,:])
             elif self.variableName=="v":
-                y = self.croco.wrapper.scoord2z_v(ssh, alpha=0., beta=0)[:,self.lonIndex,:]
+                y = np.squeeze(self.croco.wrapper.scoord2z_v(ssh, alpha=0., beta=0, latindex=self.latIndex)[:,1:,:])
             else :
-                y = self.croco.wrapper.scoord2z_r(ssh, alpha=0., beta=0)[:,self.lonIndex,:]
+                y = np.squeeze(self.croco.wrapper.scoord2z_r(ssh, alpha=0., beta=0, latindex=self.latIndex)[:,1:-1,:])
             # Create new window
             self.sectionXZ = SectionFrame(\
                 croco=self.croco, \
@@ -1311,38 +1327,46 @@ class CrocoGui(wx.Frame):
             self.sectionXZ.updateVariableZ()
 
         # Longitude section
-        elif typSection == "YZ":
+        elif typSection == "YZ":       
+            ssh = self.croco.variables['ssh'].isel(t=self.timeIndex,\
+            	          x_r=slice(self.lonIndex-1,self.lonIndex+2)).values
+
             # Variable from croco file
             if self.variableName in self.croco.ListOfVariables:
                 variable = self.croco.get_variable(self.variableName, \
                     xindex=self.lonIndex)
             # Derived Variable
-            elif self.variableName in self.croco.ListOfDerived:        
-                x = self.croco.wrapper.coords['time']
-                z = self.croco.wrapper.scoord2z_r(ssh, alpha=0., beta=0)[:,:,self.lonIndex]
-                section = np.full_like(z,np.nan)
-                section = np.tile(section,(len(x),1,1))
-                variable = self.croco.create_DataArray(data=section, dimstyp='yzt')
-                for it in range(len(x)):
+            elif self.variableName in self.croco.ListOfDerived: 
+                ntimes = self.croco.wrapper.ntimes
+                N = self.croco.wrapper.N
+                M = self.croco.wrapper.M
+                variable = self.croco.create_DataArray(data=np.zeros((ntimes,N,M)), dimstyp='yzt')
+                for it in range(ntimes):
                     if 'pv' in self.variableName:
-                        variable[it,1:,:] = get_pv(self.croco,self.timeIndex, minlev=0, maxlev=self.croco.wrapper.N-1,typ=self.variableName)[:,:,self.lonIndex]
+                        variable[it,1:,:] = get_pv(self.croco,self.timeIndex, \
+                        	minlev=0, maxlev=self.croco.wrapper.N-1, \
+                        	lonindex=self.lonIndex,typ=self.variableName)
                 
                     elif self.variableName == 'zeta_k':
-                        variable[it,1:,:] = get_zetak(self.croco,self.timeIndex, minlev=0, maxlev=self.croco.wrapper.N-1)[:,:,self.lonIndex]
+                        variable[it,1:,:] = get_zetak(self.croco,self.timeIndex, \
+                        	minlev=0, maxlev=self.croco.wrapper.N-1, \
+                        	lonindex=self.lonIndex)
                 
                     elif self.variableName == 'dtdz':
-                        variable[it,1:,:] = get_dtdz(self.croco,self.timeIndex, minlev=0, maxlev=self.croco.wrapper.N-1)[:,:,self.lonIndex]
+                        variable[it,1:,:] = get_dtdz(self.croco,self.timeIndex, \
+                        	minlev=0, maxlev=self.croco.wrapper.N-1, \
+                        	lonindex=self.lonIndex)
                 
             # Get Latitude coordinates
             x = self.croco.get_coord(self.variableName, direction='y')
             x = repmat(x[:,self.lonIndex].squeeze(),self.croco.wrapper.N,1)
             # Get depths coordinates
             if self.variableName=="u":
-                y = self.croco.wrapper.scoord2z_u(ssh, alpha=0., beta=0)[:,:,self.lonIndex]
+                y = np.squeeze(self.croco.wrapper.scoord2z_u(ssh, alpha=0., beta=0, lonindex=self.lonIndex)[:,:,1:])
             elif self.variableName=="v":
-                y = self.croco.wrapper.scoord2z_v(ssh, alpha=0., beta=0)[:,:,self.lonIndex]
+                y = np.squeeze(self.croco.wrapper.scoord2z_v(ssh, alpha=0., beta=0, lonindex=self.lonIndex)[:,:,1:-1])
             else :
-                y = self.croco.wrapper.scoord2z_r(ssh, alpha=0., beta=0)[:,:,self.lonIndex]
+                y = np.squeeze(self.croco.wrapper.scoord2z_r(ssh, alpha=0., beta=0, lonindex=self.lonIndex)[:,:,1:-1])
             # Create new window
             self.sectionYZ = SectionFrame(\
                 croco=self.croco, \

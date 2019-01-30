@@ -21,20 +21,36 @@ import numpy as np
 def get_pv(croco,tindex,depth=None, minlev=None, maxlev=None, \
 	       lonindex=None, latindex=None, typ='ijk'):
 
-    mask = croco.wrapper.masks['mask_r']
-    pv = np.full_like(mask,np.nan)
+    # mask = croco.wrapper.masks['mask_r']
+    # pv = np.full_like(mask,np.nan)
 
     # pv from minlev to maxlev
-    if depth is None or depth<=0:
-        pv = np.tile(pv,(maxlev-minlev,1,1))
-        pv[:,1:-1,1:-1] = calc_ertel(croco,tindex,minlev=minlev,maxlev=maxlev,typ=typ)
+    if depth is None:
+    	if lonindex is not None:
+    		var = np.full((maxlev-minlev,croco.wrapper.M),np.nan)
+    	else:
+    		var = np.full((maxlev-minlev,croco.wrapper.L),np.nan)
+        var[:,1:-1] = calc_ertel(croco,tindex,minlev=minlev,maxlev=maxlev,\
+        	lonindex=lonindex, latindex=latindex,typ=typ)
+    
+    # pv on a depth
+    elif depth<=0:
+    	var = np.full((maxlev-minlev,croco.wrapper.M,croco.wrapper.L),np.nan)
+        # pv = np.tile(pv,(maxlev-minlev,1,1))
+        var[:,1:-1,1:-1] = calc_ertel(croco,tindex,minlev=minlev,maxlev=maxlev,\
+        	lonindex=lonindex, latindex=latindex,typ=typ)
+    
     # pv on a level
     elif depth > 0:
-        pv[1:-1,1:-1] = calc_ertel(croco,tindex,minlev=int(depth)-2,maxlev=int(depth-1),typ=typ) 
-    return pv
+    	var = np.full((croco.wrapper.M,croco.wrapper.L),np.nan)
+        var[1:-1,1:-1] = calc_ertel(croco,tindex,\
+        	minlev=int(depth)-2,maxlev=int(depth-1),\
+        	lonindex=lonindex, latindex=latindex,typ=typ) 
+    return var
 
 
-def calc_ertel(croco,tindex, minlev=None, maxlev=None, typ='ijk'):                  
+def calc_ertel(croco,tindex, minlev=None, maxlev=None, \
+	           lonindex=None, latindex=None, typ='ijk'):                  
     #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     #
     #   epv    - The ertel potential vorticity with respect to property 'lambda'
@@ -58,28 +74,42 @@ def calc_ertel(croco,tindex, minlev=None, maxlev=None, typ='ijk'):
     #
     # Grid parameters
     #
-    pm = croco.wrapper.metrics['dx_r']
+    minlon=0 if lonindex is None else lonindex-1
+    maxlon=croco.wrapper.L-1 if lonindex is None else lonindex+1
+    minlat=0 if latindex is None else latindex-1
+    maxlat=croco.wrapper.M-1 if latindex is None else latindex+1
+
+    pm = croco.wrapper.metrics['dx_r'][minlat:maxlat+1,minlon:maxlon+1]
     pm = np.tile(pm,(maxlev-minlev+1,1,1))
-    pn = croco.wrapper.metrics['dy_r']
+    pn = croco.wrapper.metrics['dy_r'][minlat:maxlat+1,minlon:maxlon+1]
     pn = np.tile(pn,(maxlev-minlev+1,1,1))
-    f = croco.wrapper.metrics['f']
+    f = croco.wrapper.metrics['f'][minlat:maxlat+1,minlon:maxlon+1]
     f = np.tile(f,(maxlev-minlev+1,1,1))
     rho0=croco.rho0
     #
     # 3D variables
     #
-    ssh = croco.variables['ssh'].isel(t=tindex).values
-    dz = croco.wrapper.scoord2dz_r(ssh, alpha=0., beta=0)[minlev:maxlev+1,:,:]
 
-    u = croco.variables['u'].isel(t=tindex, z_r=slice(minlev,maxlev+1))
-    v = croco.variables['v'].isel(t=tindex, z_r=slice(minlev,maxlev+1))
-    w = croco.variables['w'].isel(t=tindex, z_r=slice(minlev,maxlev+1))
+    ssh = croco.variables['ssh'].isel(t=tindex,\
+    	               y_r=slice(minlat,maxlat+1),x_r=slice(minlon,maxlon+1)).values
+    dz = croco.wrapper.scoord2dz_r(ssh, alpha=0., beta=0, \
+    	               lonindex=lonindex, latindex=latindex)[minlev:maxlev+1,:]
+    u = croco.variables['u'].isel(t=tindex, z_r=slice(minlev,maxlev+1),\
+    	                    y_u=slice(minlat,maxlat+1),x_u=slice(minlon,maxlon)).values
+    v = croco.variables['v'].isel(t=tindex, z_r=slice(minlev,maxlev+1),\
+    	                    y_v=slice(minlat,maxlat),x_v=slice(minlon,maxlon+1)).values
+    
+    w = croco.variables['w'].isel(t=tindex, z_r=slice(minlev,maxlev+1),\
+    	               y_r=slice(minlat,maxlat+1),x_r=slice(minlon,maxlon+1))
 
     try:
-        rho = croco.variables['rho'].isel(t=tindex, z_r=slice(minlev,maxlev+1))
+        rho = croco.variables['rho'].isel(t=tindex, z_r=slice(minlev,maxlev+1),\
+    	               y_r=slice(minlat,maxlat+1),x_r=slice(minlon,maxlon+1))
     except:
-        # temp = croco.variables['temp'].isel(t=tindex, z_r=slice(minlev,maxlev+1))
-        # salt = croco.variables['salt'].isel(t=tindex, z_r=slice(minlev,maxlev+1))
+        # temp = croco.variables['temp'].isel(t=tindex, z_r=slice(minlev,maxlev+1),\
+    	               # y_r=slice(minlat,maxlat+1),x_r=slice(minlon,maxlon+1))
+        # salt = croco.variables['salt'].isel(t=tindex, z_r=slice(minlev,maxlev+1),\
+    	               # y_r=slice(minlat,maxlat+1),x_r=slice(minlon,maxlon+1))
         # rho = croco.rho_eos(temp,salt,0)
         print('rho not in history file')
         return
@@ -183,7 +213,7 @@ def calc_ertel(croco,tindex, minlev=None, maxlev=None, typ='ijk'):
     pvj =  pvj/rho0
     pvk =  pvk/rho0
     #
-    return(pvi + pvj + pvk)
+    return(np.squeeze(pvi + pvj + pvk))
     #
     #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -193,22 +223,34 @@ def calc_ertel(croco,tindex, minlev=None, maxlev=None, typ='ijk'):
 ###############################################################
 # Zeta_k term
 
-def get_zetak(croco,tindex,depth=None, minlev=None, maxlev=None):
+def get_zetak(croco,tindex,depth=None, minlev=None, maxlev=None, \
+	                         lonindex=None, latindex=None):
 
-    mask = croco.wrapper.masks['mask_r']
-    pv = np.full_like(mask,np.nan)
+    # mask = croco.wrapper.masks['mask_r']
+    # pv = np.full_like(mask,np.nan)
 
-    # pv from minlev to maxlev
-    if depth is None or depth<=0:
-        pv = np.tile(pv,(maxlev-minlev,1,1))
-        pv[:,1:-1,1:-1] = calc_zetak(croco,tindex,minlev=minlev,maxlev=maxlev-1)
+    # pv from level 0 to N at latitude or longitude index
+    if depth is None:
+    	if lonindex is not None:
+    		var = np.full((maxlev-minlev,croco.wrapper.M),np.nan)
+    	else:
+    		var = np.full((maxlev-minlev,croco.wrapper.L),np.nan)
+        var[:,1:-1] = calc_zetak(croco,tindex,minlev=minlev,maxlev=maxlev-1,\
+        	                         lonindex=lonindex, latindex=latindex)
+    elif depth<=0:
+    	var = np.full((maxlev-minlev,croco.wrapper.M,croco.wrapper.L),np.nan)
+        var[:,1:-1,1:-1] = calc_zetak(croco,tindex,minlev=minlev,maxlev=maxlev-1,\
+        	                         lonindex=lonindex, latindex=latindex)
     # pv on a level
     elif depth > 0:
-        pv[1:-1,1:-1] = calc_zetak(croco,tindex,minlev=int(depth)-1,maxlev=int(depth-1)) 
-    return pv
+    	var = np.full((croco.wrapper.M,croco.wrapper.L),np.nan)
+        var[1:-1,1:-1] = calc_zetak(croco,tindex,\
+        	                       minlev=int(depth)-1,maxlev=int(depth-1),\
+        	                       lonindex=lonindex, latindex=latindex) 
+    return var
 
-
-def calc_zetak(croco,tindex, minlev=None, maxlev=None):                  
+def calc_zetak(croco,tindex, minlev=None, maxlev=None, \
+	                         lonindex=None, latindex=None):                  
     #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     #
     #   
@@ -229,18 +271,25 @@ def calc_zetak(croco,tindex, minlev=None, maxlev=None):
     #
     # Grid parameters
     #
-    pm = croco.wrapper.metrics['dx_r']
+    minlon=0 if lonindex is None else lonindex-1
+    maxlon=croco.wrapper.L-1 if lonindex is None else lonindex+1
+    minlat=0 if latindex is None else latindex-1
+    maxlat=croco.wrapper.M-1 if latindex is None else latindex+1
+
+    pm = croco.wrapper.metrics['dx_r'][minlat:maxlat+1,minlon:maxlon+1]
     pm = np.tile(pm,(maxlev-minlev+1,1,1))
-    pn = croco.wrapper.metrics['dy_r']
+    pn = croco.wrapper.metrics['dy_r'][minlat:maxlat+1,minlon:maxlon+1]
     pn = np.tile(pn,(maxlev-minlev+1,1,1))
-    f = croco.wrapper.metrics['f']
+    f = croco.wrapper.metrics['f'][minlat:maxlat+1,minlon:maxlon+1]
     f = np.tile(f,(maxlev-minlev+1,1,1))
     #
     # 3D variables
     #
 
-    u = croco.variables['u'].isel(t=tindex, z_r=slice(minlev,maxlev+1))
-    v = croco.variables['v'].isel(t=tindex, z_r=slice(minlev,maxlev+1))
+    u = croco.variables['u'].isel(t=tindex, z_r=slice(minlev,maxlev+1),\
+    	                    y_u=slice(minlat,maxlat+1),x_u=slice(minlon,maxlon)).values
+    v = croco.variables['v'].isel(t=tindex, z_r=slice(minlev,maxlev+1),\
+    	                    y_v=slice(minlat,maxlat),x_v=slice(minlon,maxlon+1)).values
     
     #
     #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -259,8 +308,8 @@ def calc_zetak(croco,tindex, minlev=None, maxlev=None):
     #  Compute Ertel potential vorticity <k hat> at horizontal RHO-points and
     #  vertical RHO-points.
     omega = dvdxi - dudeta
-    return( 0.25 * (omega[:,:-1,1:]+omega[:,1:,1:]+ \
-    	             omega[:,:-1,:-1]+omega[:,1:,:-1]) / f[:,1:-1,1:-1] )
+    return( np.squeeze(0.25 * (omega[:,:-1,1:]+omega[:,1:,1:]+ \
+    	             omega[:,:-1,:-1]+omega[:,1:,:-1]) / f[:,1:-1,1:-1] ))
     
 
     #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -272,27 +321,48 @@ def calc_zetak(croco,tindex, minlev=None, maxlev=None):
 ###############################################################
 # dtdz term
 
-def get_dtdz(croco,tindex,depth=None, minlev=None, maxlev=None):
+def get_dtdz(croco,tindex,depth=None, minlev=None, maxlev=None, \
+	         lonindex=None, latindex=None):
 
-    mask = croco.wrapper.masks['mask_r']
-    dtdz = np.full_like(mask,np.nan)
-
-    # dtdz from minlev to maxlev
-    if depth is None or depth<=0:
-        dtdz = np.tile(dtdz,(maxlev-minlev,1,1))
+    # dtdz from levels 1 to N at a given longitude or latitude 
+    if depth is None :
+    	if lonindex is not None:
+    		dtdz = np.full((maxlev-minlev,croco.wrapper.M),np.nan)
+    	else:
+    		dtdz = np.full((maxlev-minlev,croco.wrapper.L),np.nan)
+        dtdz[:] = calc_dtdz(croco,tindex,minlev=minlev,maxlev=maxlev,\
+        	                lonindex=lonindex, latindex=latindex)
+    # dtdz from levels minlev to maxlev
+    elif depth<=0:
+    	dtdz = np.full((maxlev-minlev,croco.wrapper.M,croco.wrapper.L),np.nan)
         dtdz[:] = calc_dtdz(croco,tindex,minlev=minlev,maxlev=maxlev)
     # dtdz on a level
     elif depth > 0:
+    	dtdz = np.full((croco.wrapper.M,croco.wrapper.L),np.nan)
         dtdz[:] = calc_dtdz(croco,tindex,minlev=int(depth)-2,maxlev=int(depth)-1) 
     return dtdz
 
-def calc_dtdz(croco,tindex, minlev=None, maxlev=None):
+def calc_dtdz(croco,tindex, minlev=None, maxlev=None, \
+	          lonindex=None, latindex=None):
 
     #
     # 3D variables
     #
-    ssh = croco.variables['ssh'].isel(t=tindex).values
-    dz = croco.wrapper.scoord2dz_r(ssh, alpha=0., beta=0)[minlev:maxlev+1,:,:]
-    t = croco.variables['temp'].isel(t=tindex, z_r=slice(minlev,maxlev+1))
-    dtdz = np.diff(t,axis=0) / (0.5*(dz[:-1,:,:]+dz[1:,:,:]))
+    if lonindex is not None:
+    	ssh = croco.variables['ssh'].isel(t=tindex,\
+    		                    x_r=slice(lonindex-1,lonindex+2)).values
+    	dz = np.squeeze(croco.wrapper.scoord2dz_r(ssh, alpha=0., beta=0, lonindex=lonindex)\
+    	                      [minlev:maxlev+1,:,1:-1])
+    	t = croco.variables['temp'].isel(t=tindex, z_r=slice(minlev,maxlev+1),x_r=lonindex)
+    elif latindex is not None:
+    	ssh = croco.variables['ssh'].isel(t=tindex,\
+    		                    y_r=slice(latindex-1,latindex+2)).values
+    	dz = np.squeeze(croco.wrapper.scoord2dz_r(ssh, alpha=0., beta=0, latindex=latindex)\
+    	                      [minlev:maxlev+1,1:-1,:])
+    	t = croco.variables['temp'].isel(t=tindex, z_r=slice(minlev,maxlev+1),y_r=latindex)
+    else:
+    	ssh = croco.variables['ssh'].isel(t=tindex).values
+    	dz = croco.wrapper.scoord2dz_r(ssh, alpha=0., beta=0)[minlev:maxlev+1,:,:]
+    	t = croco.variables['temp'].isel(t=tindex, z_r=slice(minlev,maxlev+1))
+    dtdz = np.diff(t,axis=0) / (0.5*(dz[:-1,:]+dz[1:,:]))
     return(dtdz)
