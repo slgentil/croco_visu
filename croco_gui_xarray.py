@@ -95,6 +95,10 @@ class SectionFrame(wx.Frame):
         self.SaveBtn.Bind(wx.EVT_BUTTON, self.onSaveBtn)
         self.TimeTxt.Bind(wx.EVT_TEXT_ENTER, self.onTimeTxt)
 
+        self.showPosition = self.CreateStatusBar(2)
+        self.showPosition.SetStatusText("x=	  , y=  ",1)
+        self.showPosition.SetStatusWidths([-1,150])
+
         self.__do_layout()
 
         # Initialize the variables of the class
@@ -172,6 +176,11 @@ class SectionFrame(wx.Frame):
     def onFigureClick(self,event):
         """Event handler for the button click on plot"""
         self.xPress, self.yPress = event.xdata, event.ydata
+
+    def ShowPosition(self, event):
+        if event.inaxes:
+            self.showPosition.SetStatusText(
+                "x={:5.1f}  y={:5.1f}".format(event.xdata, event.ydata),1)
 
     def rect_select_callback(self, eclick, erelease):
         """Event handler for rectangle selector on plot"""
@@ -329,7 +338,8 @@ class SectionFrame(wx.Frame):
         """ plot the current variable in the canvas """
         self.figure.clf()
         self.canvas.mpl_connect('button_press_event', self.onFigureClick)
-        
+        self.canvas.mpl_connect('motion_notify_event', self.ShowPosition)
+
         variableZ = ma.masked_invalid(self.variableZ.values)
         if setlim:
             self.mincolor = np.min(variableZ)
@@ -396,6 +406,10 @@ class ProfileFrame(wx.Frame):
         self.ZoomOutBtn.Bind(wx.EVT_BUTTON, self.onZoomOutBtn)
         self.PrintBtn.Bind(wx.EVT_BUTTON, self.onPrintBtn)
 
+        self.showPosition = self.CreateStatusBar(2)
+        self.showPosition.SetStatusText("x=	  , y=  ",1)
+        self.showPosition.SetStatusWidths([-1,150])
+
         self.__do_layout()
 
         # Initialize the variables of the class
@@ -440,6 +454,11 @@ class ProfileFrame(wx.Frame):
         self.ylim = [ min(self.yPress,self.yRelease),max(self.yPress,self.yRelease)]
         self.draw(setlim=False)
 
+    def ShowPosition(self, event):
+        if event.inaxes:
+            self.showPosition.SetStatusText(
+                "x={:5.1f}  y={:5.1f}".format(event.xdata, event.ydata),1)
+
     def onZoomInBtn(self,event): 
         """Event handler for the button click Zoom in button"""         
         self.figure.RS.set_active(True)
@@ -462,6 +481,8 @@ class ProfileFrame(wx.Frame):
     def draw(self, setlim=True):
         """ plot the current variable in the canvas """
 
+        self.canvas.mpl_connect('motion_notify_event', self.ShowPosition)
+        
         self.x = ma.masked_invalid(self.x)
         self.y = ma.masked_invalid(self.y)
         if setlim:
@@ -505,10 +526,6 @@ class CrocoGui(wx.Frame):
         self.DerivedVariableChoice = wx.Choice(self.Panel, wx.ID_ANY, choices=["Derived Variables ..."])
         self.DerivedVariableChoice.SetSelection(0)
 
-        self.ResetColorBtn = wx.Button(self.Panel, wx.ID_ANY, "Reset Color")
-        self.MinColorTxt = wx.TextCtrl(self.Panel, wx.ID_ANY, "Min Color", style=wx.TE_CENTRE|wx.TE_PROCESS_ENTER)
-        self.MaxColorTxt = wx.TextCtrl(self.Panel, wx.ID_ANY, "Max Color", style=wx.TE_CENTRE|wx.TE_PROCESS_ENTER)
-
         self.LabelTime = wx.StaticText(self.Panel,-1,label="Choose Time",style = wx.ALIGN_CENTER)
         self.LabelMinMaxTime = wx.StaticText(self.Panel, wx.ID_ANY, " ", style=wx.ALIGN_LEFT)
         self.TimeMinusBtn = wx.Button(self.Panel, wx.ID_ANY, "<")
@@ -541,6 +558,10 @@ class CrocoGui(wx.Frame):
         self.ZoomOutBtn = wx.Button(self.Panel, wx.ID_ANY, "Zoom Out")
         self.PrintBtn = wx.Button(self.Panel, wx.ID_ANY, "Print")
 
+        self.ResetColorBtn = wx.Button(self.Panel, wx.ID_ANY, "Reset Color")
+        self.MinColorTxt = wx.TextCtrl(self.Panel, wx.ID_ANY, "Min Color", style=wx.TE_CENTRE|wx.TE_PROCESS_ENTER)
+        self.MaxColorTxt = wx.TextCtrl(self.Panel, wx.ID_ANY, "Max Color", style=wx.TE_CENTRE|wx.TE_PROCESS_ENTER)
+
         # bind the menu event to an event handler
         # self.OpenFileBtn.Bind(wx.EVT_BUTTON, self.onOpenFile)
         self.CrocoVariableChoice.Bind(wx.EVT_CHOICE, self.onCrocoVariableChoice)
@@ -567,6 +588,10 @@ class CrocoGui(wx.Frame):
         self.ZoomInBtn.Bind(wx.EVT_BUTTON, self.onZoomInBtn)
         self.ZoomOutBtn.Bind(wx.EVT_BUTTON, self.onZoomOutBtn)
         self.PrintBtn.Bind(wx.EVT_BUTTON, self.onPrintBtn)
+
+        self.showPosition = self.CreateStatusBar(2)
+        self.showPosition.SetStatusText("x=	  , y=  ",1)
+        self.showPosition.SetStatusWidths([-1,150])
 
         # self.__set_properties()
         self.__do_layout()
@@ -608,10 +633,6 @@ class CrocoGui(wx.Frame):
         chooseVariablesSizer.Add(self.CrocoVariableChoice, 0, wx.ALL, 5)
         chooseVariablesSizer.Add(self.DerivedVariableChoice, 0, wx.ALL, 5)
 
-        colorSizer.Add(self.ResetColorBtn, 0, wx.ALL, 5)
-        colorSizer.Add(self.MinColorTxt, 0, wx.ALL, 5)
-        colorSizer.Add(self.MaxColorTxt, 0, wx.ALL, 5)
-
         labelTimeSizer.Add(self.LabelTime, 0, wx.ALL|wx.EXPAND, 5)
         labelMinMaxTimeSizer.Add(self.LabelMinMaxTime, 0, wx.ALL|wx.EXPAND, 5)
         timeSizer.Add(self.TimeMinusBtn, 0, wx.ALL, 5)
@@ -644,6 +665,11 @@ class CrocoGui(wx.Frame):
         buttonsSizer.Add(self.ZoomInBtn,0, wx.ALL, 5)
         buttonsSizer.Add(self.ZoomOutBtn,0, wx.ALL, 5)
         buttonsSizer.Add(self.PrintBtn,0, wx.ALL, 5)
+
+        colorSizer.Add(self.ResetColorBtn, 0, wx.ALL, 5)
+        colorSizer.Add(self.MinColorTxt, 0, wx.ALL, 5)
+        colorSizer.Add(self.MaxColorTxt, 0, wx.ALL, 5)
+        # colorSizer.Add(self.Position, 0, wx.ALL, 5)
 
         # leftSizer.Add(openFileSizer, 0,wx.ALL|wx.EXPAND, 5 )
         leftSizer.Add(chooseVariablesSizer, 0, wx.ALL|wx.EXPAND, 5)
@@ -685,6 +711,11 @@ class CrocoGui(wx.Frame):
         self.latIndex,self.lonIndex = self.findLatLonIndex(self.lon, self.lat)
         self.LonSectionTxt.SetValue('%.2F' % self.lon)
         self.LatSectionTxt.SetValue('%.2F' % self.lat)
+
+    def ShowPosition(self, event):
+        if event.inaxes:
+            self.showPosition.SetStatusText(
+                "x={:5.1f}  y={:5.1f}".format(event.xdata, event.ydata),1)
 
     def rect_select_callback(self, eclick, erelease):
         self.xPress, self.yPress = eclick.xdata, eclick.ydata
@@ -1234,7 +1265,7 @@ class CrocoGui(wx.Frame):
         self.figure.clf()
         # Prepare the canvas to receive click events
         self.canvas.mpl_connect('button_press_event', self.onFigureClick)
-
+        self.canvas.mpl_connect('motion_notify_event', self.ShowPosition)
         variableXY = ma.masked_invalid(self.variableXY.values)
         # Set default parameters of the plot if needed
         if setlim:
