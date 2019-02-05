@@ -1339,8 +1339,15 @@ class CrocoGui(wx.Frame):
 
         time = str(self.croco.wrapper._get_date(self.timeIndex))
         depth = float(self.LevelTxt.GetValue())
-        lon = self.croco.wrapper.coords['lon_r']
-        lat = self.croco.wrapper.coords['lat_r']
+        if self.variableName=="u":
+        	lon = self.croco.wrapper.coords['lon_u']
+        	lat = self.croco.wrapper.coords['lat_u']
+        elif self.variableName=="v":
+        	lon = self.croco.wrapper.coords['lon_v']
+        	lat = self.croco.wrapper.coords['lat_v']
+        else:
+        	lon = self.croco.wrapper.coords['lon_r']
+        	lat = self.croco.wrapper.coords['lat_r']
 
         if depth > 0:
             self.title = "{:s}, Level={:4d}, Time={:s}".format(self.variableName,self.levelIndex+1,time)
