@@ -1353,6 +1353,7 @@ class CrocoGui(wx.Frame):
             self.title = "{:s}, Level={:4d}, Time={:s}".format(self.variableName,self.levelIndex+1,time)
         else:
             self.title = "{:s}, Depth={:4.1f}, Time={:s}".format(self.variableName,depth,time)
+        # print(lon.shape,lat.shape,variableXY.shape)
         mypcolor(self,lon,lat,variableXY,\
                       title=self.title,\
                       xlabel='Longitude',\

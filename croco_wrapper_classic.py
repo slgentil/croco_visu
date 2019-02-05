@@ -246,7 +246,6 @@ class CrocoWrapper(object):
             self.scoord
         except:
             self.scoord = 2
-        # N = np.float64(self.N.copy())
         N = np.float64(self.N)
         try:
             theta_s = self.metrics['theta_s'].values
@@ -268,8 +267,6 @@ class CrocoWrapper(object):
             h = self.metrics['h'].values
         scoord = self.metrics['scoord'].values
 
-        cff1 = 1. / np.sinh(theta_s)
-        cff2 = 0.5 / np.tanh(0.5 * theta_s)
         sc_w = (np.arange(N + 1, dtype=np.float64) - N) / N
         sc_r = ((np.arange(1, N + 1, dtype=np.float64)) - N - 0.5) / N
         
@@ -283,15 +280,15 @@ class CrocoWrapper(object):
         if scoord == 2:
             Cs = CSF(sc, theta_s, theta_b)
         else:
-            cff1=1./np.sinh(theta_s)
-            cff2=0.5/np.tanh(0.5*theta_s)
-            if type=='w':
-                sc=(np.arange(N+1)-N)/N
-                N=N+1
-            else:
-                sc=(np.arange(N+1)-N-0.5)/N
-            Cs=(1.-theta_b)*cff1*np.sinh(theta_s*sc) \
-                +theta_b*(cff2*np.tanh(theta_s*(sc+0.5))-0.5)
+            try:
+                cff1=1./sinh(theta_s)
+                cff2=0.5/tanh(0.5*theta_s)
+            except:
+                cff1=0.
+                cff2=0.
+            Cs=(1.-theta_b)*cff1*sinh(theta_s*sc) \
+                +theta_b*(cff2*tanh(theta_s*(sc+0.5))-0.5)
+
         if scoord == 2:
             hinv = 1. / (h + hc)
             cff = (hc * sc).squeeze()
