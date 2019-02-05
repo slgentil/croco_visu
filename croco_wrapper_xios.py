@@ -13,50 +13,56 @@ second2day = 1. /86400.
 
 path = "./"
 keymap_files = {
-    'coordinate_file' : path+"Go_Meddy_his.nc",
-    'metric_file' : path+"Go_Meddy_his.nc",
-    'mask_file' : path+"Go_Meddy_his.nc",
-    'variable_file' : path+"Go_Meddy_his.nc" 
+    'coordinate_file' : path+"moz_his.nc",
+    'metric_file' : path+"moz_his.nc",
+    'mask_file' : path+"moz_his.nc",
+    'variable_file' : path+"moz_his.nc" 
 }
 
 keymap_dimensions = {
-    'xi_rho': 'x_r',
-    'eta_rho': 'y_r',
-    'xi_u': 'x_u',
-    # 'y_u': 'y_u',
-    # 'x_v': 'x_v',
-    'eta_v': 'y_v',
-    # 'x_w': 'x_w',
-    # 'y_w': 'y_w',
+    'x_rho': 'x_r',
+    'y_rho': 'y_r',
+    'x_u': 'x_u',
+    'y_u': 'y_u',
+    'x_v': 'x_v',
+    'y_v': 'y_v',
+    'x_w': 'x_w',
+    'y_w': 'y_w',
     's_rho': 'z_r',
     's_w': 'z_w',
-    'time': 't'
+    'time_counter': 't'
 }
 
 
 keymap_coordinates = {
-	'x_rho':'lon_r' ,
-	'y_rho':'lat_r' ,
-	# 'y_u':'lon_u' ,
-	# 'nav_lat_u':'lat_u' ,
-	# 'nav_lon_v':'lon_v' ,
-	# 'y_v':'lat_v' ,
-	# 'nav_lon_w':'lon_w' ,
-	# 'nav_lat_w':'lat_w' ,
-	'scrum_time':'time' 
+	'nav_lon_rho':'lon_r' ,
+	'nav_lat_rho':'lat_r' ,
+	'nav_lon_u':'lon_u' ,
+	'nav_lat_u':'lat_u' ,
+	'nav_lon_v':'lon_v' ,
+	'nav_lat_v':'lat_v' ,
+	'nav_lon_w':'lon_w' ,
+	'nav_lat_w':'lat_w' ,
+	'time_instant':'time' 
 	}
 
 
 keymap_variables = {
-    'zeta': 'ssh'
-}
+    'ssh':'ssh' ,
+    'u':'u' ,
+    'v':'v' ,
+    'w':'w' ,
+    'temp':'temp' ,
+    'salt':'salt' ,
+    'rho':'rho'  
+    }
 
 keymap_metrics = {
 	'pm':'dx_r',
 	'pn':'dy_r',
 	'theta_s': 'theta_s',
 	'theta_b': 'theta_b',
-	# 'Tcline': 'tcline' ,
+	'Tcline': 'tcline' ,
 	'Vtransform': 'scoord' ,
 	'hc': 'hc',
 	'h': 'h',
@@ -106,33 +112,42 @@ class CrocoWrapper(object):
 
     def change_dimensions(self,ds):
         for key,val in self.keymap_dimensions.items():
-            ds = ds.rename({key:val})
+            try:
+                ds = ds.rename({key:val})
+            except:
+                pass
         return ds
 
     def change_coords(self,ds):
-    	for key,val in self.keymap_coordinates.items():
-            ds = ds.rename({key:val})
-    	return ds
+        for key,val in self.keymap_coordinates.items():
+            try:
+                ds = ds.rename({key:val})
+            except:
+                pass
+        return ds
 
     def change_variables(self,ds):
         for key,val in self.keymap_variables.items():
-            ds = ds.rename({key:val})
+            try:
+                ds = ds.rename({key:val})
+            except:
+                pass    
         return ds
 
     def change_metrics(self,ds):
         for key,val in self.keymap_metrics.items():
             try:
-                ds = ds.rename({key:val}) 
+                ds = ds.rename({key:val})  
             except:
-                ds.attrs[key] = ds.attrs.pop(val)   	
+                pass    
         return ds
 
     def change_mask(self,ds):
         for key,val in self.keymap_masks.items():
             try:
-                ds = ds.rename({key:val})
+                ds = ds.rename({key:val})  
             except:
-                pass    	
+                pass        
         return ds
 
     def define_dimensions(self,ds):
@@ -159,10 +174,9 @@ class CrocoWrapper(object):
 
         # time = time - time_origin
         self.coords['time'] = self._get(self.dscoord,'time',chunks=self.chunks,decode_times=False)
-        self.coords['time'] = self.coords['time'] * second2day
-        # self.coords['time'].values=np.array(self.coords['time'], dtype='datetime64[D]') - \
-        #     np.array(self.coords['time'].time_origin, dtype='datetime64[D]')
-        # self.coords['time'].values=	self.coords['time'].values / np.timedelta64(1, 'D')
+        self.coords['time'].values=np.array(self.coords['time'], dtype='datetime64[D]') - \
+            np.array(self.coords['time'].time_origin, dtype='datetime64[D]')
+        self.coords['time'].values= self.coords['time'].values / np.timedelta64(1, 'D')
 
     def define_metrics(self):
     	ds = return_xarray_dataset(self.keymap_files['metric_file'])
@@ -171,8 +185,7 @@ class CrocoWrapper(object):
     	ds = self.change_metrics(ds)
     	self.dsmetrics = ds
     	for key,val in self.keymap_metrics.items():
-        	   self.metrics[val] = self._get(self.dsmetrics,val,chunks=self.chunks)
-
+        	self.metrics[val] = self._get(self.dsmetrics,val,chunks=self.chunks)
 
     def define_masks(self):
     	ds = return_xarray_dataset(self.keymap_files['mask_file'])
@@ -183,10 +196,10 @@ class CrocoWrapper(object):
     	for key,val in self.keymap_masks.items():
             try:
                 self.masks[val] = self._get(self.dsmask,val,chunks=self.chunks)
-                self.masks[val] = np.where(self.masks[val]==0.,np.nan,self.masks[val])
             except:
-                mask_rho = np.ones((self.M,self.L))
-                self.masks[val] = mask_rho
+                mask_rho = np.ones_like(self.coords['lon_r'])
+                self.masks[val] = xr.DataArray(data=mask_rho)
+            self.masks[val] = np.where(self.masks[val]==0.,np.nan,self.masks[val])
 
     def define_variables(self):
     	ds = return_xarray_dataset(self.keymap_files['variable_file'])
@@ -210,7 +223,7 @@ class CrocoWrapper(object):
 
 
 
-    def _scoord2z(self, point_type, ssh, alpha, beta):
+    def _scoord2z(self, point_type, ssh, alpha, beta, lonindex=None, latindex=None):
         """
         scoord2z finds z at either rho or w points (positive up, zero at rest surface)
         h          = array of depths (e.g., from grd file)
@@ -261,7 +274,12 @@ class CrocoWrapper(object):
             hc = self.metrics['hc'].values
         except:
             hc = self.metrics['hc']
-        h = self.metrics['h'].values
+        if lonindex is not None:
+            h = self.metrics['h'].values[:,lonindex-1:lonindex+2]
+        elif latindex is not None:
+            h = self.metrics['h'].values[latindex-1:latindex+2,:]
+        else:
+            h = self.metrics['h'].values
         scoord = self.metrics['scoord'].values
 
         cff1 = 1. / np.sinh(theta_s)
@@ -306,46 +324,52 @@ class CrocoWrapper(object):
             raise Exception("Unknown scoord, should be 1 or 2")
         return z.squeeze(), np.float32(Cs)
 
-    def scoord2z_r(self, ssh=0., alpha=0., beta=1.):
+    def scoord2z_r(self, ssh=0., alpha=0., beta=1., lonindex=None, latindex=None):
         '''
         Depths at rho point
         '''
-        return self._scoord2z('r', ssh=ssh, alpha=alpha, beta=beta)[0]
+        return self._scoord2z('r', ssh=ssh, alpha=alpha, beta=beta, \
+            lonindex=lonindex, latindex=latindex)[0]
 
 
-    def scoord2z_u(self, ssh=0., alpha=0., beta=1.):
+    def scoord2z_u(self, ssh=0., alpha=0., beta=1., lonindex=None, latindex=None):
         '''
         Depths at u point
         '''
-        depth = self._scoord2z('r', ssh=ssh, alpha=alpha, beta=beta)[0]
+        depth = self._scoord2z('r', ssh=ssh, alpha=alpha, beta=beta, \
+            lonindex=lonindex, latindex=latindex)[0]
         return 0.5*(depth[:,:,:-1]+depth[:,:,1:])
 
-    def scoord2z_v(self, ssh=0., alpha=0., beta=1.):
+    def scoord2z_v(self, ssh=0., alpha=0., beta=1., lonindex=None, latindex=None):
         '''
         Depths at v point
         '''
-        depth = self._scoord2z('r', ssh=ssh, alpha=alpha, beta=beta)[0]
+        depth = self._scoord2z('r', ssh=ssh, alpha=alpha, beta=beta, \
+            lonindex=lonindex, latindex=latindex)[0]
         return 0.5*(depth[:,:-1,:]+depth[:,1:,:])
 
-    def scoord2dz_r(self, ssh=0., alpha=0., beta=1.):
+    def scoord2dz_r(self, ssh=0., alpha=0., beta=1., lonindex=None, latindex=None):
         """
         dz at rho points, 3d matrix
         """
-        dz = self._scoord2z('w', ssh=ssh, alpha=alpha, beta=beta)[0]
+        dz = self._scoord2z('w', ssh=ssh, alpha=alpha, beta=beta, \
+            lonindex=lonindex, latindex=latindex)[0]
         return dz[1:] - dz[:-1]
 
-    def scoord2dz_u(self, ssh=0., alpha=0., beta=1.):
+    def scoord2dz_u(self, ssh=0., alpha=0., beta=1., lonindex=None, latindex=None):
         '''
         dz at u points, 3d matrix
         '''
-        dz = self.scoord2dz(ssh=ssh, alpha=0., beta=1.)
+        dz = self.scoord2dz(ssh=ssh, alpha=0., beta=1., \
+            lonindex=lonindex, latindex=latindex)
         return 0.5*(dz[:,:,:-1]+dz[:,:,1:])
 
-    def scoord2dz_v(self, ssh=0., alpha=0., beta=1.):
+    def scoord2dz_v(self, ssh=0., alpha=0., beta=1., lonindex=None, latindex=None):
         '''
         dz at v points
         '''
-        dz = self.scoord2dz(ssh=ssh, alpha=0., beta=1.)
+        dz = self.scoord2dz(ssh=ssh, alpha=0., beta=1., \
+            lonindex=lonindex, latindex=latindex)
         return 0.5*(dz[:,:-1,:]+dz[:,1:,:])
 
 # Run the program

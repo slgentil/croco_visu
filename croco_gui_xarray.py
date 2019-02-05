@@ -71,13 +71,13 @@ class SectionFrame(wx.Frame):
         self.ZoomBtn = wx.Button(self.panel, wx.ID_ANY, "Zoom")
         self.PanBtn = wx.Button(self.panel, wx.ID_ANY, "Pan")
         self.HomeBtn = wx.Button(self.panel, wx.ID_ANY, "Home")
-        self.SaveBtn = wx.Button(self.panel, wx.ID_ANY, "Save")
+        self.SavePlotBtn = wx.Button(self.panel, wx.ID_ANY, "Save Plot")
 
         self.AnimationBtn = wx.Button(self.panel, wx.ID_ANY, "Animation")
         self.startTimeTxt = wx.TextCtrl(self.panel, wx.ID_ANY, "1", style=wx.TE_CENTRE|wx.TE_PROCESS_ENTER)
         self.endTimeTxt = wx.TextCtrl(self.panel, wx.ID_ANY, "1", style=wx.TE_CENTRE|wx.TE_PROCESS_ENTER)
-        self.CancelBtn = wx.Button(self.panel, wx.ID_ANY, "Cancel")
-        self.SaveBtn = wx.Button(self.panel, wx.ID_ANY, "Save")
+        # self.CancelBtn = wx.Button(self.panel, wx.ID_ANY, "Cancel")
+        self.SaveAnimBtn = wx.Button(self.panel, wx.ID_ANY, "Save Anim")
         
         self.ResetColorBtn = wx.Button(self.panel, wx.ID_ANY, "Reset Color")
         self.MinColorTxt = wx.TextCtrl(self.panel, wx.ID_ANY, "Min Color", style=wx.TE_CENTRE|wx.TE_PROCESS_ENTER)
@@ -85,19 +85,18 @@ class SectionFrame(wx.Frame):
 
         # bind the menu event to an event handler
         self.canvas.mpl_connect('button_press_event', self.onFigureClick)
-        self.canvas.mpl_connect('<Escape>', self.abortAnim)
         self.AnimationBtn.Bind(wx.EVT_BUTTON, self.onAnimationBtn)
         self.startTimeTxt.Bind(wx.EVT_TEXT_ENTER, self.onstartTimeTxt)
         self.endTimeTxt.Bind(wx.EVT_TEXT_ENTER, self.onendTimeTxt)
         self.ZoomBtn.Bind(wx.EVT_BUTTON, self.onZoomBtn)
         self.PanBtn.Bind(wx.EVT_BUTTON, self.onPanBtn)
         self.HomeBtn.Bind(wx.EVT_BUTTON, self.onHomeBtn)
-        self.SaveBtn.Bind(wx.EVT_BUTTON, self.onSaveBtn)
+        self.SavePlotBtn.Bind(wx.EVT_BUTTON, self.onSavePlotBtn)
         self.ResetColorBtn.Bind(wx.EVT_BUTTON, self.onResetColorBtn)
         self.MinColorTxt.Bind(wx.EVT_TEXT_ENTER, self.onMinColorTxt)
         self.MaxColorTxt.Bind(wx.EVT_TEXT_ENTER, self.onMaxColorTxt)
-        self.CancelBtn.Bind(wx.EVT_BUTTON, self.onCancelBtn)
-        self.SaveBtn.Bind(wx.EVT_BUTTON, self.onSaveBtn)
+        # self.CancelBtn.Bind(wx.EVT_BUTTON, self.onCancelBtn)
+        self.SaveAnimBtn.Bind(wx.EVT_BUTTON, self.onSaveAnimBtn)
         self.TimeTxt.Bind(wx.EVT_TEXT_ENTER, self.onTimeTxt)
 
         self.showPosition = self.CreateStatusBar(2)
@@ -153,13 +152,13 @@ class SectionFrame(wx.Frame):
         timeSizer.Add(self.ZoomBtn,0, wx.ALL, 5)
         timeSizer.Add(self.PanBtn,0, wx.ALL, 5)
         timeSizer.Add(self.HomeBtn,0, wx.ALL, 5)
-        timeSizer.Add(self.SaveBtn,0, wx.ALL, 5)
+        timeSizer.Add(self.SavePlotBtn,0, wx.ALL, 5)
 
         buttonsSizer.Add(self.AnimationBtn,0, wx.ALL, 5)
         buttonsSizer.Add(self.startTimeTxt,0, wx.ALL, 5)
         buttonsSizer.Add(self.endTimeTxt,0, wx.ALL, 5)
-        buttonsSizer.Add(self.CancelBtn,0, wx.ALL, 5)
-        buttonsSizer.Add(self.SaveBtn,0, wx.ALL, 5)
+        # buttonsSizer.Add(self.CancelBtn,0, wx.ALL, 5)
+        buttonsSizer.Add(self.SaveAnimBtn,0, wx.ALL, 5)
 
         colorSizer.Add(self.ResetColorBtn, 0, wx.ALL, 5)
         colorSizer.Add(self.MinColorTxt, 0, wx.ALL, 5)
@@ -197,14 +196,10 @@ class SectionFrame(wx.Frame):
         self.drawz(setlim=False)
 
 
-    def onCancelBtn(self,event):
-    	# global abort_anim
-    	abort_anim=True
-    	print("Not implemented yet")
-
-    def abortAnim(self,event):
-    	# global abort_anim
-		self.anim.event_source.stop()
+    # def onCancelBtn(self,event):
+    # 	# global abort_anim
+    # 	abort_anim=True
+    # 	print("Not implemented yet")
 
     # Event handler for animation
     def onAnimationBtn(self,event):
@@ -223,21 +218,19 @@ class SectionFrame(wx.Frame):
 		os.system('rm -rf '+printDir+'dummy.mp4')
 		# self.clim = [np.min(self.variable),np.max(self.variable)]
 		save_count = self.endTimeIndex - self.startTimeIndex + 1
-		self.anim = animation.FuncAnimation(self.figure, self.animate, \
+		anim = animation.FuncAnimation(self.figure, self.animate, \
 		           frames = range(self.startTimeIndex,self.endTimeIndex+1), repeat=False, \
 		           blit = False, save_count=save_count)
 		mpl.verbose.set_level("helpful")
-		self.anim.save(printDir+'dummy.mp4')
+		anim.save(printDir+'dummy.mp4')
 		# self.canvas.draw()
 
     # Event handler for Save animation
-    def onSaveBtn(self,event): 
+    def onSaveAnimBtn(self,event): 
         """Event handler for the button click Animation button"""
-        os.system('rm -rf ./Figures/'+self.variableName+'.mp4')
-        try:
-            os.makedirs('./Figures')
-        except:
-            pass 
+        printDir = self.croco.startDir+"/Figures_" + self.croco.get_run_name()+"/"
+        if not os.path.isdir(printDir):
+        	os.mkdir(printDir)
         time1 = str(self.croco.wrapper._get_date(self.startTimeIndex))
         time2 = str(self.croco.wrapper._get_date(self.endTimeIndex))
         filename = "{:s}_{:s}{:4.1f}_Time{:s}-{:s}.mp4".format(self.variableName,self.slice,self.sliceCoord, \
@@ -306,7 +299,7 @@ class SectionFrame(wx.Frame):
         self.toolbar.home()
 
     # Event handler for Print
-    def onSaveBtn(self,event):
+    def onSavePlotBtn(self,event):
         """Event handler for the button click Print button""" 
         # printDir = self.croco.startDir+"/Figures_" + self.croco.get_run_name()+"/"
         # if not os.path.isdir(printDir):
@@ -415,14 +408,14 @@ class ProfileFrame(wx.Frame):
         self.ZoomBtn = wx.Button(self.panel, wx.ID_ANY, "Zoom")
         self.HomeBtn = wx.Button(self.panel, wx.ID_ANY, "Home")
         self.PanBtn = wx.Button(self.panel, wx.ID_ANY, "Pan")
-        self.SaveBtn = wx.Button(self.panel, wx.ID_ANY, "Save")
+        self.SavePlotBtn = wx.Button(self.panel, wx.ID_ANY, "Save Plot")
 
 
         # bind the menu event to an event handler
         self.ZoomBtn.Bind(wx.EVT_BUTTON, self.onZoomBtn)
         self.HomeBtn.Bind(wx.EVT_BUTTON, self.onHomeBtn)
         self.PanBtn.Bind(wx.EVT_BUTTON, self.onPanBtn)
-        self.SaveBtn.Bind(wx.EVT_BUTTON, self.onSaveBtn)
+        self.SavePlotBtn.Bind(wx.EVT_BUTTON, self.onSavePlotBtn)
 
         self.showPosition = self.CreateStatusBar(2)
         self.showPosition.SetStatusText("x=	  , y=  ",1)
@@ -453,7 +446,7 @@ class ProfileFrame(wx.Frame):
         buttonsSizer.Add(self.ZoomBtn,0, wx.ALL, 5)
         buttonsSizer.Add(self.PanBtn,0, wx.ALL, 5)
         buttonsSizer.Add(self.HomeBtn,0, wx.ALL, 5)
-        buttonsSizer.Add(self.SaveBtn,0, wx.ALL, 5)
+        buttonsSizer.Add(self.SavePlotBtn,0, wx.ALL, 5)
 
         topSizer.Add(canvasSizer, 0, wx.CENTER)
         topSizer.Add(buttonsSizer, 0, wx.ALL|wx.EXPAND, 5)
@@ -493,7 +486,7 @@ class ProfileFrame(wx.Frame):
         # self.draw()
         self.toolbar.pan()
 
-    def onSaveBtn(self,event):
+    def onSavePlotBtn(self,event):
         """Event handler for the button click Print button""" 
         # printDir = self.croco.startDir+"/Figures_" + self.croco.get_run_name()+"/"
         # if not os.path.isdir(printDir):
@@ -579,15 +572,16 @@ class CrocoGui(wx.Frame):
         self.canvas = FigureCanvas(self.PanelCanvas, -1, self.figure)        
         self.toolbar = NavigationToolbar(self.canvas)
         self.toolbar.Hide()
+        self.ZoomBtn = wx.Button(self.Panel, wx.ID_ANY, "Zoom")        
+        self.PanBtn = wx.Button(self.Panel, wx.ID_ANY, "Pan")
+        self.HomeBtn = wx.Button(self.Panel, wx.ID_ANY, "Home")
+        self.SavePlotBtn = wx.Button(self.Panel, wx.ID_ANY, "Save Plot")
 
         self.AnimationBtn = wx.Button(self.Panel, wx.ID_ANY, "Animation")
         self.startTimeTxt = wx.TextCtrl(self.Panel, wx.ID_ANY, "1", style=wx.TE_CENTRE|wx.TE_PROCESS_ENTER)
         self.endTimeTxt = wx.TextCtrl(self.Panel, wx.ID_ANY, "1", style=wx.TE_CENTRE|wx.TE_PROCESS_ENTER)
-        self.ZoomBtn = wx.Button(self.Panel, wx.ID_ANY, "Zoom")        
-        self.PanBtn = wx.Button(self.Panel, wx.ID_ANY, "Pan")
-        self.HomeBtn = wx.Button(self.Panel, wx.ID_ANY, "Home")
-        self.SaveBtn = wx.Button(self.Panel, wx.ID_ANY, "Save")
-
+        
+        self.SaveAnimBtn = wx.Button(self.Panel, wx.ID_ANY, "Save Anim")
         self.ResetColorBtn = wx.Button(self.Panel, wx.ID_ANY, "Reset Color")
         self.MinColorTxt = wx.TextCtrl(self.Panel, wx.ID_ANY, "Min Color", style=wx.TE_CENTRE|wx.TE_PROCESS_ENTER)
         self.MaxColorTxt = wx.TextCtrl(self.Panel, wx.ID_ANY, "Max Color", style=wx.TE_CENTRE|wx.TE_PROCESS_ENTER)
@@ -616,10 +610,11 @@ class CrocoGui(wx.Frame):
         self.AnimationBtn.Bind(wx.EVT_BUTTON, self.onAnimationBtn)
         self.startTimeTxt.Bind(wx.EVT_TEXT_ENTER, self.onstartTimeTxt)
         self.endTimeTxt.Bind(wx.EVT_TEXT_ENTER, self.onendTimeTxt)
+        self.SaveAnimBtn.Bind(wx.EVT_BUTTON, self.onSaveAnimBtn)
         self.ZoomBtn.Bind(wx.EVT_BUTTON, self.onZoomBtn)
         self.PanBtn.Bind(wx.EVT_BUTTON, self.onPanBtn)
         self.HomeBtn.Bind(wx.EVT_BUTTON, self.onHomeBtn)
-        self.SaveBtn.Bind(wx.EVT_BUTTON, self.onSaveBtn)
+        self.SavePlotBtn.Bind(wx.EVT_BUTTON, self.onSavePlotBtn)
 
         self.showPosition = self.CreateStatusBar(2)
         self.showPosition.SetStatusText("x=	  , y=  ",1)
@@ -697,11 +692,12 @@ class CrocoGui(wx.Frame):
         buttonsSizer.Add(self.ZoomBtn,0, wx.ALL, 5)
         buttonsSizer.Add(self.PanBtn,0, wx.ALL, 5)
         buttonsSizer.Add(self.HomeBtn,0, wx.ALL, 5)
-        buttonsSizer.Add(self.SaveBtn,0, wx.ALL, 5)
+        buttonsSizer.Add(self.SavePlotBtn,0, wx.ALL, 5)
 
         animSizer.Add(self.AnimationBtn,0, wx.ALL, 5)
         animSizer.Add(self.startTimeTxt,0, wx.ALL, 5)
         animSizer.Add(self.endTimeTxt,0, wx.ALL, 5)
+        animSizer.Add(self.SaveAnimBtn,0, wx.ALL, 5)
 
         colorSizer.Add(self.ResetColorBtn, 0, wx.ALL, 5)
         colorSizer.Add(self.MinColorTxt, 0, wx.ALL, 5)
@@ -1118,6 +1114,27 @@ class CrocoGui(wx.Frame):
         printDir = self.croco.startDir+"/Figures_" + self.croco.get_run_name()+"/"
         if not os.path.isdir(printDir):
                 os.mkdir(printDir)
+        # time1 = str(self.croco.wrapper._get_date(self.startTimeIndex))
+        # time2 = str(self.croco.wrapper._get_date(self.endTimeIndex))
+        # depth = float(self.LevelTxt.GetValue())
+        # if depth>0:
+        #     filename = "{:s}_Level={:4.0f}_Time={:s}-{:s}.mp4".format(self.variableName,self.depth,time1,time2)
+        # else:
+        #     filename = "{:s}_Depth={:4.0f}_Time={:s}-{:s}.mp4".format(self.variableName,self.depth,time1,time2)
+        # filename=filename.replace(" ","")
+
+        # self.clim = [np.min(self.variableXY),np.max(self.variableXY)]
+        save_count = self.endTimeIndex - self.startTimeIndex + 1
+        anim = animation.FuncAnimation(self.figure, self.animate, \
+                   frames = range(self.startTimeIndex,self.endTimeIndex+1), repeat=False, \
+                   blit = False, save_count=save_count)
+        anim.save(printDir+'dummy.mp4')
+
+    # Event handler for Save animation
+    def onSaveAnimBtn(self,event): 
+        printDir = self.croco.startDir+"/Figures_" + self.croco.get_run_name()+"/"
+        if not os.path.isdir(printDir):
+                os.mkdir(printDir)
         time1 = str(self.croco.wrapper._get_date(self.startTimeIndex))
         time2 = str(self.croco.wrapper._get_date(self.endTimeIndex))
         depth = float(self.LevelTxt.GetValue())
@@ -1126,14 +1143,7 @@ class CrocoGui(wx.Frame):
         else:
             filename = "{:s}_Depth={:4.0f}_Time={:s}-{:s}.mp4".format(self.variableName,self.depth,time1,time2)
         filename=filename.replace(" ","")
-
-        # self.clim = [np.min(self.variableXY),np.max(self.variableXY)]
-        save_count = self.endTimeIndex - self.startTimeIndex + 1
-        anim = animation.FuncAnimation(self.figure, self.animate, \
-                   frames = range(self.startTimeIndex,self.endTimeIndex+1), repeat=False, \
-                   blit = False, save_count=save_count)
-        anim.save(printDir+filename, writer="ffmpeg")
-        # self.canvas.draw()
+        copyfile(printDir+'dummy.mp4',printDir+filename )
 
     def animate( self, i):
         # Method done at each time step of the animation
@@ -1180,7 +1190,7 @@ class CrocoGui(wx.Frame):
         # self.drawxy(setlim=False)        
         self.toolbar.home()
 
-    def onSaveBtn(self,event):
+    def onSavePlotBtn(self,event):
         # printDir = self.croco.startDir+"/Figures_" + self.croco.get_run_name()+"/"
         # if not os.path.isdir(printDir):
         #         os.mkdir(printDir)
