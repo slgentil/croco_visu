@@ -71,7 +71,9 @@ class SectionFrame(wx.Frame):
         self.toolbar.Hide()
 
         self.TimeLabel = wx.StaticText(self.panel,-1,label="Time",style = wx.ALIGN_CENTER)
+        self.TimeMinusBtn = wx.Button(self.panel, wx.ID_ANY, "<")
         self.TimeTxt = wx.TextCtrl(self.panel, wx.ID_ANY, " ", style=wx.TE_CENTRE|wx.TE_PROCESS_ENTER)
+        self.TimePlusBtn = wx.Button(self.panel, wx.ID_ANY, ">")
         self.ZoomBtn = wx.Button(self.panel, wx.ID_ANY, "Zoom")
         self.PanBtn = wx.Button(self.panel, wx.ID_ANY, "Pan")
         self.HomeBtn = wx.Button(self.panel, wx.ID_ANY, "Home")
@@ -102,7 +104,9 @@ class SectionFrame(wx.Frame):
         self.MaxColorTxt.Bind(wx.EVT_TEXT_ENTER, self.onMaxColorTxt)
         self.AbortBtn.Bind(wx.EVT_BUTTON, self.onAbortBtn)
         self.SaveAnimBtn.Bind(wx.EVT_BUTTON, self.onSaveAnimBtn)
+        self.TimeMinusBtn.Bind(wx.EVT_BUTTON, self.onTimeMinusBtn)
         self.TimeTxt.Bind(wx.EVT_TEXT_ENTER, self.onTimeTxt)
+        self.TimePlusBtn.Bind(wx.EVT_BUTTON, self.onTimePlusBtn)
 
         self.showPosition = self.CreateStatusBar(2)
         self.showPosition.SetStatusText("x=   , y=  ",1)
@@ -153,7 +157,9 @@ class SectionFrame(wx.Frame):
         canvasSizer.Add(self.canvas, 0, wx.ALL, 5)
 
         timeSizer.Add(self.TimeLabel,0, wx.ALL, 5)
+        timeSizer.Add(self.TimeMinusBtn, 0, wx.ALL, 5)
         timeSizer.Add(self.TimeTxt,0, wx.ALL, 5)
+        timeSizer.Add(self.TimePlusBtn, 0, wx.ALL, 5)
         timeSizer.Add(self.ZoomBtn,0, wx.ALL, 5)
         timeSizer.Add(self.PanBtn,0, wx.ALL, 5)
         timeSizer.Add(self.HomeBtn,0, wx.ALL, 5)
@@ -287,6 +293,20 @@ class SectionFrame(wx.Frame):
         self.time = self.croco.wrapper._get_date(self.timeIndex)
         self.TimeTxt.SetValue(str(self.time))
         self.updateVariableZ(setlim=False)
+        self.drawz(setlim=False)
+
+    def onTimeMinusBtn(self,event):
+        self.timeIndex = max(self.timeIndex - 1,0)
+        self.time = self.croco.wrapper._get_date(self.timeIndex)
+        self.TimeTxt.SetValue(str(self.time))
+        self.updateVariableZ()
+        self.drawz(setlim=False)
+
+    def onTimePlusBtn(self,event):
+        self.timeIndex = min(self.timeIndex + 1,self.croco.wrapper.ntimes - 1)
+        self.time = self.croco.wrapper._get_date(self.timeIndex)
+        self.TimeTxt.SetValue(str(self.time))
+        self.updateVariableZ()
         self.drawz(setlim=False)
 
     # Event handler for zoom
