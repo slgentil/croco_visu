@@ -30,12 +30,6 @@ def plotCurv(frame,x=None,y=None,xlabel=None,ylabel=None,legend=None, title = No
 	fig.clf()
 	# axes = fig.add_axes([0.07,0.05,0.98,0.90])
 	axes = fig.add_axes([0.08,0.1,0.85,0.85])
-	# fig.RS = RectangleSelector(axes, frame.rect_select_callback, \
- #                               drawtype='box', useblit=True, \
- #                               button=[1], # left button \
- #                               spancoords='pixels', \
- #                               interactive=True)	
-	# fig.RS.set_active(False)
 
 	xm = ma.masked_invalid(x)
 	ym = ma.masked_invalid(y)
@@ -92,12 +86,6 @@ def mypcolor(frame,x,y,z, \
 	# fig.set_size_inches( (winsize[0], winsize[1]) ) 	
 	fig = frame.figure
 	ax = fig.add_axes([0.15,0.1,0.85,0.85])
-	# fig.RS = RectangleSelector(ax, frame.rect_select_callback, \
- #                               drawtype='box', useblit=True, \
- #                               button=[1], # left button \
- #                               spancoords='pixels', \
- #                               interactive=True)
-	# fig.RS.set_active(False)
 
 	if xlim is None: 
 	    ax.set_xlim((np.min(x),np.max(x)))

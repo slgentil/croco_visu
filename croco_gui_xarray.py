@@ -3,8 +3,11 @@
 
 import sys
 import os
+from time import sleep 
 from   shutil import copyfile
+from threading import Thread 
 import wx
+# from wx.lib.delayedresult import startWorker 
 import time
 from datetime import datetime
 import xarray as xr
@@ -24,6 +27,7 @@ from matplotlib import animation
 from CrocoXarray import Croco
 from derived_variables import get_pv, get_zetak, get_dtdz
 from myplot import plotCurv, mypcolor
+from matplotlib.animation import FFMpegWriter
 
 wildcard = "Netcdf Files (*.nc)|*.nc"
 figsize = [6,5]
@@ -76,7 +80,7 @@ class SectionFrame(wx.Frame):
         self.AnimationBtn = wx.Button(self.panel, wx.ID_ANY, "Animation")
         self.startTimeTxt = wx.TextCtrl(self.panel, wx.ID_ANY, "1", style=wx.TE_CENTRE|wx.TE_PROCESS_ENTER)
         self.endTimeTxt = wx.TextCtrl(self.panel, wx.ID_ANY, "1", style=wx.TE_CENTRE|wx.TE_PROCESS_ENTER)
-        # self.CancelBtn = wx.Button(self.panel, wx.ID_ANY, "Cancel")
+        self.AbortBtn = wx.Button(self.panel, wx.ID_ANY, "Abort")
         self.SaveAnimBtn = wx.Button(self.panel, wx.ID_ANY, "Save Anim")
         
         self.ResetColorBtn = wx.Button(self.panel, wx.ID_ANY, "Reset Color")
@@ -86,6 +90,7 @@ class SectionFrame(wx.Frame):
         # bind the menu event to an event handler
         self.canvas.mpl_connect('button_press_event', self.onFigureClick)
         self.AnimationBtn.Bind(wx.EVT_BUTTON, self.onAnimationBtn)
+        self.AbortBtn.Bind(wx.EVT_BUTTON, self.onAbortBtn)
         self.startTimeTxt.Bind(wx.EVT_TEXT_ENTER, self.onstartTimeTxt)
         self.endTimeTxt.Bind(wx.EVT_TEXT_ENTER, self.onendTimeTxt)
         self.ZoomBtn.Bind(wx.EVT_BUTTON, self.onZoomBtn)
@@ -95,12 +100,12 @@ class SectionFrame(wx.Frame):
         self.ResetColorBtn.Bind(wx.EVT_BUTTON, self.onResetColorBtn)
         self.MinColorTxt.Bind(wx.EVT_TEXT_ENTER, self.onMinColorTxt)
         self.MaxColorTxt.Bind(wx.EVT_TEXT_ENTER, self.onMaxColorTxt)
-        # self.CancelBtn.Bind(wx.EVT_BUTTON, self.onCancelBtn)
+        self.AbortBtn.Bind(wx.EVT_BUTTON, self.onAbortBtn)
         self.SaveAnimBtn.Bind(wx.EVT_BUTTON, self.onSaveAnimBtn)
         self.TimeTxt.Bind(wx.EVT_TEXT_ENTER, self.onTimeTxt)
 
         self.showPosition = self.CreateStatusBar(2)
-        self.showPosition.SetStatusText("x=	  , y=  ",1)
+        self.showPosition.SetStatusText("x=   , y=  ",1)
         self.showPosition.SetStatusWidths([-1,150])
 
         self.__do_layout()
@@ -157,7 +162,7 @@ class SectionFrame(wx.Frame):
         buttonsSizer.Add(self.AnimationBtn,0, wx.ALL, 5)
         buttonsSizer.Add(self.startTimeTxt,0, wx.ALL, 5)
         buttonsSizer.Add(self.endTimeTxt,0, wx.ALL, 5)
-        # buttonsSizer.Add(self.CancelBtn,0, wx.ALL, 5)
+        buttonsSizer.Add(self.AbortBtn,0, wx.ALL, 5)
         buttonsSizer.Add(self.SaveAnimBtn,0, wx.ALL, 5)
 
         colorSizer.Add(self.ResetColorBtn, 0, wx.ALL, 5)
@@ -183,70 +188,73 @@ class SectionFrame(wx.Frame):
         self.xPress, self.yPress = event.xdata, event.ydata
 
     def ShowPosition(self, event):
+        """Show the current cursor position at the bottom right of the window """
         if event.inaxes:
             self.showPosition.SetStatusText(
                 "x={:5.1f}  y={:5.1f}".format(event.xdata, event.ydata),1)
 
-    def rect_select_callback(self, eclick, erelease):
-        """Event handler for rectangle selector on plot"""
-        self.xPress, self.yPress = eclick.xdata, eclick.ydata
-        self.xRelease, self.yRelease = erelease.xdata, erelease.ydata
-        self.xlim = [min(self.xPress,self.xRelease),max(self.xPress,self.xRelease)]
-        self.ylim = [ min(self.yPress,self.yRelease),max(self.yPress,self.yRelease)]
-        self.drawz(setlim=False)
+    def onAnimationBtn(self, event): 
+        """
+        Launch the animation in a separate thread to keep the GUI alive
+        Prepare tools to save the movie
+        """
+        # Initialize creation of movie
+        self.movie = FFMpegWriter()
+        self.movie.setup(self.figure, 'moviez.mp4', dpi=100)
 
+        self.shouldAbort=False
 
-    # def onCancelBtn(self,event):
-    # 	# global abort_anim
-    # 	abort_anim=True
-    # 	print("Not implemented yet")
+        # Launch animate in a thread
+        self.thread = Thread(target=self.animate) 
+        self.thread.start() 
 
-    # Event handler for animation
-    def onAnimationBtn(self,event):
-	    # abort_anim = False
+    def onAbortBtn(self, event): 
+        self.shouldAbort = True 
 
-		# def onClick(event):
-		# 	# nonlocal abort_anim
-		# 	# if abort_anim:
-		# 	self.anim.event_source.stop()
-		# 	# abort_anim = False
+    def animate(self): 
+        """
+        Calculate and draw the variable from start Time to end Time
+        """
+        for i in range(self.startTimeIndex, self.endTimeIndex + 1): 
+            sleep(0.5) 
+            self.timeIndex = i
+            # Get the variable at the new timeIndex
+            self.updateVariableZ(setlim=False)
+            # Draw the variable in the main thread
+            wx.CallAfter(self.drawz, setlim=False, anim=True) 
+            if self.shouldAbort: 
+                break 
+        # Go to animateDone after aborting or ending the animation
+        wx.CallAfter(self.animateDone, self.shouldAbort) 
 
-		"""Event handler for the button click Animation button"""
-		printDir = self.croco.startDir+"/Figures_" + self.croco.get_run_name()+"/"
-		if not os.path.isdir(printDir):
-		        os.mkdir(printDir)
-		os.system('rm -rf '+printDir+'dummy.mp4')
-		# self.clim = [np.min(self.variable),np.max(self.variable)]
-		save_count = self.endTimeIndex - self.startTimeIndex + 1
-		anim = animation.FuncAnimation(self.figure, self.animate, \
-		           frames = range(self.startTimeIndex,self.endTimeIndex+1), repeat=False, \
-		           blit = False, save_count=save_count)
-		mpl.verbose.set_level("helpful")
-		anim.save(printDir+'dummy.mp4')
-		# self.canvas.draw()
+    def animateDone(self, abort): 
+        """
+        method called at the end of the animation or after aborting it
+        """
+        # Close the movie
+        self.movie.finish()
+
+        # Remove the movie if aborting
+        if  self.shouldAbort :
+            os.system('rm -rf '+'moviez.mp4')
+        self.shouldAbort = False 
 
     # Event handler for Save animation
     def onSaveAnimBtn(self,event): 
-        """Event handler for the button click Animation button"""
-        printDir = self.croco.startDir+"/Figures_" + self.croco.get_run_name()+"/"
-        if not os.path.isdir(printDir):
-        	os.mkdir(printDir)
-        time1 = str(self.croco.wrapper._get_date(self.startTimeIndex))
-        time2 = str(self.croco.wrapper._get_date(self.endTimeIndex))
-        filename = "{:s}_{:s}{:4.1f}_Time{:s}-{:s}.mp4".format(self.variableName,self.slice,self.sliceCoord, \
-            time1,time2).replace(" ", "") 
-        copyfile(printDir+'dummy.mp4',printDir+filename )
+        """
+        Copy file movie*.mp4 in the right place with the right name
+        """
+        if os.path.isfile('moviez.mp4') :
+            printDir = self.croco.startDir+"/Figures_" + self.croco.get_run_name()+"/"
+            if not os.path.isdir(printDir):
+                os.mkdir(printDir)
+            time1 = str(self.croco.wrapper._get_date(self.startTimeIndex))
+            time2 = str(self.croco.wrapper._get_date(self.endTimeIndex))
+            filename = "{:s}_{:s}{:4.1f}_Time{:s}-{:s}.mp4".format(self.variableName,self.slice,self.sliceCoord, \
+                time1,time2).replace(" ", "") 
+            copyfile('moviez.mp4',printDir+filename )
+            os.system('rm -rf '+'moviez.mp4')
 
-    def animate( self, i):
-        """ Function to plot animation in canvas """
-        # global abort_anim
-        self.timeIndex = i
-        # if abort_anim:
-        # 	self.anim.event_source.stop()
-        # 	abort_anim = False
-        # else:
-        # 	self.updateVariableZ(setlim=False)
-        self.updateVariableZ(setlim=False)
 
     def onstartTimeTxt(self,event):
         """Event handler for Enter key in start time text """
@@ -279,6 +287,7 @@ class SectionFrame(wx.Frame):
         self.time = self.croco.wrapper._get_date(self.timeIndex)
         self.TimeTxt.SetValue(str(self.time))
         self.updateVariableZ(setlim=False)
+        self.drawz(setlim=False)
 
     # Event handler for zoom
     def onZoomBtn(self,event):    
@@ -301,16 +310,13 @@ class SectionFrame(wx.Frame):
     # Event handler for Print
     def onSavePlotBtn(self,event):
         """Event handler for the button click Print button""" 
-        # printDir = self.croco.startDir+"/Figures_" + self.croco.get_run_name()+"/"
-        # if not os.path.isdir(printDir):
-        #         os.mkdir(printDir)
-        # # time = str(self.croco.wrapper._get_date(self.timeIndex))
-        # filename = self.title.replace(',','_').replace(" ", "")+".png"
-        # # filename = "{:s}_{:s}{:4.1f}_Time{:s}.png".format(self.variableName,self.slice,self.sliceCoord, \
-        # #     time).replace(" ", "")
-        # os.system('rm -rf '+printDir+filename)
-        # self.figure.savefig(printDir+filename, dpi=self.figure.dpi)
-        self.toolbar.save_figure(None)
+        printDir = self.croco.startDir+"/Figures_" + self.croco.get_run_name()+"/"
+        if not os.path.isdir(printDir):
+                os.mkdir(printDir)
+        filename = self.title.replace(',','_').replace(" ", "")+".png"
+        os.system('rm -rf '+printDir+filename)
+        self.figure.savefig(printDir+filename, dpi=self.figure.dpi)
+        # self.toolbar.save_figure(None)
 
     # Event handler for Color setup
     def onResetColorBtn(self,event):
@@ -338,10 +344,10 @@ class SectionFrame(wx.Frame):
             self.variableZ = self.variable.isel(t=self.timeIndex)
         except:
             return
-        self.drawz(setlim=setlim)
+        # self.drawz(setlim=setlim)
 
 
-    def drawz(self, setlim=True):
+    def drawz(self, setlim=True, anim=False):
         """ plot the current variable in the canvas """
         self.figure.clf()
         self.canvas.mpl_connect('button_press_event', self.onFigureClick)
@@ -366,6 +372,8 @@ class SectionFrame(wx.Frame):
                       xlim=self.xlim,\
                       ylim=self.ylim,\
                       clim=self.clim)
+
+        if anim: self.movie.grab_frame()
 
         self.canvas.draw()
         self.canvas.Refresh()
@@ -418,7 +426,7 @@ class ProfileFrame(wx.Frame):
         self.SavePlotBtn.Bind(wx.EVT_BUTTON, self.onSavePlotBtn)
 
         self.showPosition = self.CreateStatusBar(2)
-        self.showPosition.SetStatusText("x=	  , y=  ",1)
+        self.showPosition.SetStatusText("x=   , y=  ",1)
         self.showPosition.SetStatusWidths([-1,150])
 
         self.__do_layout()
@@ -488,13 +496,13 @@ class ProfileFrame(wx.Frame):
 
     def onSavePlotBtn(self,event):
         """Event handler for the button click Print button""" 
-        # printDir = self.croco.startDir+"/Figures_" + self.croco.get_run_name()+"/"
-        # if not os.path.isdir(printDir):
-        #         os.mkdir(printDir)
-        # filename = self.title.replace(",", "_").replace(" ","")+".png"
-        # os.system('rm -Rf '+printDir+filename)
-        # self.figure.savefig(printDir+filename, dpi=self.figure.dpi)
-        self.toolbar.save_figure(None)
+        printDir = self.croco.startDir+"/Figures_" + self.croco.get_run_name()+"/"
+        if not os.path.isdir(printDir):
+                os.mkdir(printDir)
+        filename = self.title.replace(",", "_").replace(" ","")+".png"
+        os.system('rm -Rf '+printDir+filename)
+        self.figure.savefig(printDir+filename, dpi=self.figure.dpi)
+        # self.toolbar.save_figure(None)
 
     #------------- Methods of class
 
@@ -537,9 +545,6 @@ class CrocoGui(wx.Frame):
         self.Panel = wx.Panel(self, wx.ID_ANY)
 
         # and a few controls
-        # self.OpenFileBtn = wx.Button(self.Panel, wx.ID_ANY, "Open History File ...")
-        # self.OpenFileTxt = wx.StaticText(self.Panel, wx.ID_ANY, " ", style=wx.ALIGN_LEFT)
-
         self.CrocoVariableChoice = wx.Choice(self.Panel, wx.ID_ANY, choices=["Croco Variables ..."])
         self.CrocoVariableChoice.SetSelection(0)
 
@@ -580,14 +585,14 @@ class CrocoGui(wx.Frame):
         self.AnimationBtn = wx.Button(self.Panel, wx.ID_ANY, "Animation")
         self.startTimeTxt = wx.TextCtrl(self.Panel, wx.ID_ANY, "1", style=wx.TE_CENTRE|wx.TE_PROCESS_ENTER)
         self.endTimeTxt = wx.TextCtrl(self.Panel, wx.ID_ANY, "1", style=wx.TE_CENTRE|wx.TE_PROCESS_ENTER)
-        
+        self.AbortBtn = wx.Button(self.Panel, wx.ID_ANY, "Abort")
         self.SaveAnimBtn = wx.Button(self.Panel, wx.ID_ANY, "Save Anim")
+
         self.ResetColorBtn = wx.Button(self.Panel, wx.ID_ANY, "Reset Color")
         self.MinColorTxt = wx.TextCtrl(self.Panel, wx.ID_ANY, "Min Color", style=wx.TE_CENTRE|wx.TE_PROCESS_ENTER)
         self.MaxColorTxt = wx.TextCtrl(self.Panel, wx.ID_ANY, "Max Color", style=wx.TE_CENTRE|wx.TE_PROCESS_ENTER)
 
         # bind the menu event to an event handler
-        # self.OpenFileBtn.Bind(wx.EVT_BUTTON, self.onOpenFile)
         self.CrocoVariableChoice.Bind(wx.EVT_CHOICE, self.onCrocoVariableChoice)
         self.DerivedVariableChoice.Bind(wx.EVT_CHOICE, self.onDerivedVariableChoice)
         self.ResetColorBtn.Bind(wx.EVT_BUTTON, self.onResetColorBtn)
@@ -610,6 +615,7 @@ class CrocoGui(wx.Frame):
         self.AnimationBtn.Bind(wx.EVT_BUTTON, self.onAnimationBtn)
         self.startTimeTxt.Bind(wx.EVT_TEXT_ENTER, self.onstartTimeTxt)
         self.endTimeTxt.Bind(wx.EVT_TEXT_ENTER, self.onendTimeTxt)
+        self.AbortBtn.Bind(wx.EVT_BUTTON, self.onAbortBtn)
         self.SaveAnimBtn.Bind(wx.EVT_BUTTON, self.onSaveAnimBtn)
         self.ZoomBtn.Bind(wx.EVT_BUTTON, self.onZoomBtn)
         self.PanBtn.Bind(wx.EVT_BUTTON, self.onPanBtn)
@@ -617,7 +623,7 @@ class CrocoGui(wx.Frame):
         self.SavePlotBtn.Bind(wx.EVT_BUTTON, self.onSavePlotBtn)
 
         self.showPosition = self.CreateStatusBar(2)
-        self.showPosition.SetStatusText("x=	  , y=  ",1)
+        self.showPosition.SetStatusText("x=   , y=  ",1)
         self.showPosition.SetStatusWidths([-1,150])
 
         # self.__set_properties()
@@ -657,8 +663,6 @@ class CrocoGui(wx.Frame):
         animSizer       = wx.BoxSizer(wx.HORIZONTAL)
         colorSizer      = wx.BoxSizer(wx.HORIZONTAL)
 
-        # openFileSizer.Add(self.OpenFileBtn, 0, wx.ALL, 5)
-        # openFileSizer.Add(self.OpenFileTxt, 1, wx.ALL|wx.EXPAND, 5)
         chooseVariablesSizer.Add(self.CrocoVariableChoice, 0, wx.ALL, 5)
         chooseVariablesSizer.Add(self.DerivedVariableChoice, 0, wx.ALL, 5)
 
@@ -697,6 +701,7 @@ class CrocoGui(wx.Frame):
         animSizer.Add(self.AnimationBtn,0, wx.ALL, 5)
         animSizer.Add(self.startTimeTxt,0, wx.ALL, 5)
         animSizer.Add(self.endTimeTxt,0, wx.ALL, 5)
+        animSizer.Add(self.AbortBtn,0, wx.ALL, 5)
         animSizer.Add(self.SaveAnimBtn,0, wx.ALL, 5)
 
         colorSizer.Add(self.ResetColorBtn, 0, wx.ALL, 5)
@@ -749,13 +754,6 @@ class CrocoGui(wx.Frame):
             self.showPosition.SetStatusText(
                 "x={:5.1f}  y={:5.1f}".format(event.xdata, event.ydata),1)
 
-    def rect_select_callback(self, eclick, erelease):
-        self.xPress, self.yPress = eclick.xdata, eclick.ydata
-        self.xRelease, self.yRelease = erelease.xdata, erelease.ydata
-        self.xlim = [min(self.xPress,self.xRelease),max(self.xPress,self.xRelease)]
-        self.ylim = [ min(self.yPress,self.yRelease),max(self.yPress,self.yRelease)]
-        self.drawxy(setlim=False)
-
     # def onOpenFile(self, event):
     def openCroco(self):
         """
@@ -764,16 +762,6 @@ class CrocoGui(wx.Frame):
         """
 
         startDir = os.getcwd()
-        # dlg = wx.FileDialog(
-        #     self, message="Choose a file",
-        #     defaultDir=startDir, 
-        #     defaultFile="",
-        #     wildcard=wildcard,
-        #     style=wx.FD_OPEN | wx.FD_MULTIPLE | wx.FD_CHANGE_DIR
-        #     )
-        # if dlg.ShowModal() == wx.ID_OK:
-        #     paths = dlg.GetPaths()
-        # dlg.Destroy()
         self.croco = Croco() 
         self.croco.startDir = startDir
 
@@ -816,12 +804,14 @@ class CrocoGui(wx.Frame):
         self.variableName = self.CrocoVariableChoice.GetString(self.CrocoVariableChoice.GetSelection())
         self.DerivedVariableChoice.SetSelection(0)
         self.updateVariableXY()
+        self.drawxy()
 
     def onDerivedVariableChoice(self, event):
         ''' Choose a computed variable to plot '''
         self.variableName = self.DerivedVariableChoice.GetString(self.DerivedVariableChoice.GetSelection())
         self.CrocoVariableChoice.SetSelection(0)
         self.updateVariableXY()
+        self.drawxy()
 
     def onResetColorBtn(self,event):
         variableXY = ma.masked_invalid(self.variableXY.values)
@@ -846,13 +836,15 @@ class CrocoGui(wx.Frame):
         self.timeIndex = max(self.timeIndex - 1,0)
         self.time = self.croco.wrapper._get_date(self.timeIndex)
         self.TimeTxt.SetValue(str(self.time))
-        self.updateVariableXY(setlim=False)
+        self.updateVariableXY()
+        self.drawxy(setlim=False)
 
     def onTimePlusBtn(self,event):
         self.timeIndex = min(self.timeIndex + 1,self.croco.wrapper.ntimes - 1)
         self.time = self.croco.wrapper._get_date(self.timeIndex)
         self.TimeTxt.SetValue(str(self.time))
-        self.updateVariableXY(setlim=False)
+        self.updateVariableXY()
+        self.drawxy(setlim=False)
 
     def onTimeTxt(self,event):
         time = float(self.TimeTxt.GetValue())
@@ -862,19 +854,23 @@ class CrocoGui(wx.Frame):
             key=lambda j:abs(time-times[j]))
         self.time = self.croco.wrapper._get_date(self.timeIndex)
         self.TimeTxt.SetValue(str(self.time))
-        self.updateVariableXY(setlim=False)
+        self.updateVariableXY()
+        self.drawxy(setlim=False)
+
 
     def onLevelMinusBtn(self,event):
         self.levelIndex = max(self.levelIndex - 1,0)
         self.depth = self.levelIndex + 1
         self.LevelTxt.SetValue(str(self.levelIndex + 1))
-        self.updateVariableXY(setlim=False)
+        self.updateVariableXY()
+        self.drawxy(setlim=False)
 
     def onLevelPlusBtn(self,event):
         self.levelIndex = min(self.levelIndex + 1,self.croco.wrapper.N - 1)
         self.depth = self.levelIndex + 1
         self.LevelTxt.SetValue(str(self.levelIndex + 1))
-        self.updateVariableXY(setlim=False)
+        self.updateVariableXY()
+        self.drawxy(setlim=False)
 
     def onLevelTxt(self,event):
         depth = float(self.LevelTxt.GetValue())
@@ -885,7 +881,8 @@ class CrocoGui(wx.Frame):
             ssh = self.croco.variables['ssh'].isel(t=self.timeIndex).values
             z = self.croco.wrapper.scoord2z_r(ssh, alpha=0., beta=0)
             self.levelIndex = np.argmax(z[:,self.latIndex,self.lonIndex]>=depth)
-        self.updateVariableXY(setlim=False)
+        self.updateVariableXY()
+        self.drawxy(setlim=False)
 
     def onLonSectionBtn(self,event):
         # if variable without z dimension
@@ -971,10 +968,10 @@ class CrocoGui(wx.Frame):
                                 [self.latIndex,self.lonIndex]
                     elif self.variableName == 'zeta_k':
                         y[it] = get_zetak(self.croco,it, depth=self.levelIndex)\
-                        	    [self.latIndex,self.lonIndex]
+                                [self.latIndex,self.lonIndex]
                     elif self.variableName == 'dtdz':
                         y[it] = get_dtdz(self.croco,it, depth=self.levelIndex)\
-                        	    [self.latIndex,self.lonIndex]
+                                [self.latIndex,self.lonIndex]
 
             title="{:s}, Lon={:4.1f}, Lat={:4.1f}, Level={:4.0f}".\
                 format(self.variableName,self.lon,self.lat, self.depth) 
@@ -1011,7 +1008,7 @@ class CrocoGui(wx.Frame):
                     if 'pv' in self.variableName:
                         # Compute pv between these levels
                         var = get_pv(self.croco,it, depth=depth, minlev=minlev, maxlev=maxlev,\
-                        	   typ=self.variableName)
+                               typ=self.variableName)
                         # Extract the slice of pv corresponding at the depth
                         try:
                             varz = self.croco.zslice(var,mask,z[minlev:maxlev,:,:],depth)[0]
@@ -1084,22 +1081,22 @@ class CrocoGui(wx.Frame):
             if 'pv' in self.variableName:
                 x = np.full_like(z, np.nan)
                 var = get_pv(self.croco,self.timeIndex, \
-                	minlev=0, maxlev=self.croco.wrapper.N-1,\
-                	lonindex=self.lonIndex, typ=self.variableName)
+                    minlev=0, maxlev=self.croco.wrapper.N-1,\
+                    lonindex=self.lonIndex, typ=self.variableName)
                 x[1:] = var[:,self.latIndex]
 
             elif self.variableName == 'zeta_k':
                 x = np.full_like(z, np.nan)
                 var = get_zetak(self.croco,self.timeIndex, \
-                	minlev=0, maxlev=self.croco.wrapper.N-1,\
-                	lonindex=self.lonIndex,)
+                    minlev=0, maxlev=self.croco.wrapper.N-1,\
+                    lonindex=self.lonIndex,)
                 x[1:] = var[:,self.latIndex]
 
             elif self.variableName == 'dtdz':
                 x = np.full_like(z, np.nan)
                 var = get_dtdz(self.croco,self.timeIndex, \
-                	minlev=0, maxlev=self.croco.wrapper.N-1,\
-                	lonindex=self.lonIndex,)
+                    minlev=0, maxlev=self.croco.wrapper.N-1,\
+                    lonindex=self.lonIndex,)
                 x[1:] = var[:,self.latIndex]
 
         # Plot the profile
@@ -1110,45 +1107,55 @@ class CrocoGui(wx.Frame):
             ylabel="Depth (m)")
         self.profileFrame.draw()
 
-    def onAnimationBtn(self,event):
-        printDir = self.croco.startDir+"/Figures_" + self.croco.get_run_name()+"/"
-        if not os.path.isdir(printDir):
-                os.mkdir(printDir)
-        # time1 = str(self.croco.wrapper._get_date(self.startTimeIndex))
-        # time2 = str(self.croco.wrapper._get_date(self.endTimeIndex))
-        # depth = float(self.LevelTxt.GetValue())
-        # if depth>0:
-        #     filename = "{:s}_Level={:4.0f}_Time={:s}-{:s}.mp4".format(self.variableName,self.depth,time1,time2)
-        # else:
-        #     filename = "{:s}_Depth={:4.0f}_Time={:s}-{:s}.mp4".format(self.variableName,self.depth,time1,time2)
-        # filename=filename.replace(" ","")
+    def onAnimationBtn(self, event): 
+        # Initialize creation of movie
+        self.movie = FFMpegWriter()
+        self.movie.setup(self.figure, 'moviexy.mp4', dpi=100)
 
-        # self.clim = [np.min(self.variableXY),np.max(self.variableXY)]
-        save_count = self.endTimeIndex - self.startTimeIndex + 1
-        anim = animation.FuncAnimation(self.figure, self.animate, \
-                   frames = range(self.startTimeIndex,self.endTimeIndex+1), repeat=False, \
-                   blit = False, save_count=save_count)
-        anim.save(printDir+'dummy.mp4')
+        self.shouldAbort=False
+
+        # Launch animate in a thread
+        self.thread = Thread(target=self.animate) 
+        self.thread.start() 
+
+    def onAbortBtn(self, event): 
+        self.shouldAbort = True 
+
+    def animate(self): 
+        for i in range(self.startTimeIndex, self.endTimeIndex + 1): 
+            sleep(0.5) 
+            self.timeIndex = i
+            self.updateVariableXY(setlim=False)
+            wx.CallAfter(self.drawxy, setlim=False, anim=True) 
+            if self.shouldAbort: 
+                break 
+        wx.CallAfter(self.animateDone, self.shouldAbort) 
+
+    def animateDone(self, abort): 
+        self.movie.finish()
+
+        if  self.shouldAbort :
+            os.system('rm -rf '+'moviexy.mp4')
+        self.shouldAbort = False 
 
     # Event handler for Save animation
     def onSaveAnimBtn(self,event): 
-        printDir = self.croco.startDir+"/Figures_" + self.croco.get_run_name()+"/"
-        if not os.path.isdir(printDir):
-                os.mkdir(printDir)
-        time1 = str(self.croco.wrapper._get_date(self.startTimeIndex))
-        time2 = str(self.croco.wrapper._get_date(self.endTimeIndex))
-        depth = float(self.LevelTxt.GetValue())
-        if depth>0:
-            filename = "{:s}_Level={:4.0f}_Time={:s}-{:s}.mp4".format(self.variableName,self.depth,time1,time2)
-        else:
-            filename = "{:s}_Depth={:4.0f}_Time={:s}-{:s}.mp4".format(self.variableName,self.depth,time1,time2)
-        filename=filename.replace(" ","")
-        copyfile(printDir+'dummy.mp4',printDir+filename )
+        if os.path.isfile('moviexy.mp4') :
+            printDir = self.croco.startDir+"/Figures_" + self.croco.get_run_name()+"/"
+            if not os.path.isdir(printDir):
+                    os.mkdir(printDir)
+            time1 = str(self.croco.wrapper._get_date(self.startTimeIndex))
+            time2 = str(self.croco.wrapper._get_date(self.endTimeIndex))
+            depth = float(self.LevelTxt.GetValue())
+            if depth>0:
+                filename = "{:s}_Level={:4.0f}_Time={:s}-{:s}.mp4".format(self.variableName,self.depth,time1,time2)
+            else:
+                filename = "{:s}_Depth={:4.0f}_Time={:s}-{:s}.mp4".format(self.variableName,self.depth,time1,time2)
+            filename=filename.replace(" ","")
+            print(printDir+filename)
+            copyfile('moviexy.mp4',printDir+filename )
+            os.system('rm -rf '+'moviexy.mp4')
 
-    def animate( self, i):
-        # Method done at each time step of the animation
-        self.timeIndex = i
-        self.updateVariableXY(setlim=False)
 
     def onstartTimeTxt(self,event):
         self.startTime = float(self.startTimeTxt.GetValue())
@@ -1179,10 +1186,6 @@ class CrocoGui(wx.Frame):
         self.toolbar.pan()
 
     def onHomeBtn(self,event):
-        # self.xlim = [np.min(self.croco.wrapper.coords['lon_r'].values), \
-        #              np.max(self.croco.wrapper.coords['lon_r'].values)]
-        # self.ylim = [np.min(self.croco.wrapper.coords['lat_r'].values), \
-        #              np.max(self.croco.wrapper.coords['lat_r'].values)]
         self.xlim = [np.min(self.croco.wrapper.coords['lon_r']), \
                      np.max(self.croco.wrapper.coords['lon_r'])]
         self.ylim = [np.min(self.croco.wrapper.coords['lat_r']), \
@@ -1191,16 +1194,13 @@ class CrocoGui(wx.Frame):
         self.toolbar.home()
 
     def onSavePlotBtn(self,event):
-        # printDir = self.croco.startDir+"/Figures_" + self.croco.get_run_name()+"/"
-        # if not os.path.isdir(printDir):
-        #         os.mkdir(printDir)
-        # # time = str(self.croco.wrapper._get_date(self.timeIndex))
-        # # filename = "{:s}_Depth={:4.0f}_Time{:s}".format(self.variableName,self.depth,time)
-        # # filename=filename.replace(" ","")+".png"
-        # filename = self.title.replace(',','_').replace(" ", "")+".png"
-        # os.system('rm -rf '+printDir+filename)
-        # self.figure.savefig(printDir+filename, dpi=self.figure.dpi)
-        self.toolbar.save_figure(None)
+        printDir = self.croco.startDir+"/Figures_" + self.croco.get_run_name()+"/"
+        if not os.path.isdir(printDir):
+                os.mkdir(printDir)
+        filename = self.title.replace(',','_').replace(" ", "")+".png"
+        os.system('rm -rf '+printDir+filename)
+        self.figure.savefig(printDir+filename, dpi=self.figure.dpi)
+        # self.toolbar.save_figure(None)
 
 
     #------------- Methods of class
@@ -1227,8 +1227,8 @@ class CrocoGui(wx.Frame):
 
         # if 2D variable, reset level
         if len(dims)==3 :
-        	depth = 120
-        	self.LevelTxt.SetValue(str(depth))
+            depth = self.croco.wrapper.N
+            self.LevelTxt.SetValue(str(depth))
 
         mask = self.croco.wrapper.masks['mask_r']
         if "x_u" in dims:
@@ -1255,8 +1255,13 @@ class CrocoGui(wx.Frame):
                     var = get_zetak(self.croco,self.timeIndex, depth=depth)
                     self.variableXY = xr.DataArray(data=var)
                 elif self.variableName == 'dtdz':
-                    var = get_dtdz(self.croco,self.timeIndex, depth=depth)
-                    self.variableXY = xr.DataArray(data=var)
+                    try:
+                        croco.variables['temp']
+                        var = get_dtdz(self.croco,self.timeIndex, depth=depth)
+                        self.variableXY = xr.DataArray(data=var)
+                    except:
+                        print("No variable temp")
+                        return
             else:
                 print("unknown variable ",self.variableName)
                 return
@@ -1313,11 +1318,11 @@ class CrocoGui(wx.Frame):
                         print("Not enough points")
                         pass
         # Draw the new self.variableXY  
-        self.variableXY.values = mask*self.variableXY.values             
-        self.drawxy(setlim=setlim)
+        self.variableXY.values = mask*self.variableXY.values 
+        # self.drawxy(setlim=setlim)
 
 
-    def drawxy(self,setlim=True):
+    def drawxy(self,setlim=True, anim=False):
         ''' Draw the current variable self.variableXY in the canvas of the main window '''
         self.figure.clf()
         # Prepare the canvas to receive click events
@@ -1340,20 +1345,19 @@ class CrocoGui(wx.Frame):
         time = str(self.croco.wrapper._get_date(self.timeIndex))
         depth = float(self.LevelTxt.GetValue())
         if self.variableName=="u":
-        	lon = self.croco.wrapper.coords['lon_u']
-        	lat = self.croco.wrapper.coords['lat_u']
+            lon = self.croco.wrapper.coords['lon_u']
+            lat = self.croco.wrapper.coords['lat_u']
         elif self.variableName=="v":
-        	lon = self.croco.wrapper.coords['lon_v']
-        	lat = self.croco.wrapper.coords['lat_v']
+            lon = self.croco.wrapper.coords['lon_v']
+            lat = self.croco.wrapper.coords['lat_v']
         else:
-        	lon = self.croco.wrapper.coords['lon_r']
-        	lat = self.croco.wrapper.coords['lat_r']
+            lon = self.croco.wrapper.coords['lon_r']
+            lat = self.croco.wrapper.coords['lat_r']
 
         if depth > 0:
             self.title = "{:s}, Level={:4d}, Time={:s}".format(self.variableName,self.levelIndex+1,time)
         else:
             self.title = "{:s}, Depth={:4.1f}, Time={:s}".format(self.variableName,depth,time)
-        # print(lon.shape,lat.shape,variableXY.shape)
         mypcolor(self,lon,lat,variableXY,\
                       title=self.title,\
                       xlabel='Longitude',\
@@ -1362,6 +1366,8 @@ class CrocoGui(wx.Frame):
                       ylim=self.ylim,\
                       clim=self.clim)
         
+        if anim: self.movie.grab_frame()
+
         self.canvas.draw()
         self.canvas.Refresh()
         self.Refresh()
@@ -1372,7 +1378,7 @@ class CrocoGui(wx.Frame):
         # Latitude section
         if typSection == "XZ":        
             ssh = self.croco.variables['ssh'].isel(t=self.timeIndex,\
-            	            y_r=slice(self.latIndex-1,self.latIndex+2)).values
+                            y_r=slice(self.latIndex-1,self.latIndex+2)).values
 
             # Variable from croco file
             if self.variableName in self.croco.ListOfVariables:
@@ -1387,18 +1393,18 @@ class CrocoGui(wx.Frame):
                 for it in range(ntimes):
                     if 'pv' in self.variableName:
                         variable[it,1:,:] = get_pv(self.croco,self.timeIndex, \
-                        	minlev=0, maxlev=self.croco.wrapper.N-1,\
-                        	latindex=self.latIndex, typ=self.variableName)
+                            minlev=0, maxlev=self.croco.wrapper.N-1,\
+                            latindex=self.latIndex, typ=self.variableName)
                 
                     elif self.variableName == 'zeta_k':
                         variable[it,1:,:] = get_zetak(self.croco,self.timeIndex, \
-                        	minlev=0, maxlev=self.croco.wrapper.N-1, \
-                        	latindex=self.latIndex)
+                            minlev=0, maxlev=self.croco.wrapper.N-1, \
+                            latindex=self.latIndex)
                 
                     elif self.variableName == 'dtdz':
                         variable[it,1:,:] = get_dtdz(self.croco,self.timeIndex, \
-                        	minlev=0, maxlev=self.croco.wrapper.N-1, \
-                        	latindex=self.latIndex)
+                            minlev=0, maxlev=self.croco.wrapper.N-1, \
+                            latindex=self.latIndex)
                 
             # Get Longitude coordinates
             x = self.croco.get_coord(self.variableName, direction='x')
@@ -1421,11 +1427,12 @@ class CrocoGui(wx.Frame):
                 timeIndex=self.timeIndex)
             # Draw the plot
             self.sectionXZ.updateVariableZ()
+            self.sectionXZ.drawz()
 
         # Longitude section
         elif typSection == "YZ":       
             ssh = self.croco.variables['ssh'].isel(t=self.timeIndex,\
-            	          x_r=slice(self.lonIndex-1,self.lonIndex+2)).values
+                          x_r=slice(self.lonIndex-1,self.lonIndex+2)).values
 
             # Variable from croco file
             if self.variableName in self.croco.ListOfVariables:
@@ -1440,18 +1447,18 @@ class CrocoGui(wx.Frame):
                 for it in range(ntimes):
                     if 'pv' in self.variableName:
                         variable[it,1:,:] = get_pv(self.croco,self.timeIndex, \
-                        	minlev=0, maxlev=self.croco.wrapper.N-1, \
-                        	lonindex=self.lonIndex,typ=self.variableName)
+                            minlev=0, maxlev=self.croco.wrapper.N-1, \
+                            lonindex=self.lonIndex,typ=self.variableName)
                 
                     elif self.variableName == 'zeta_k':
                         variable[it,1:,:] = get_zetak(self.croco,self.timeIndex, \
-                        	minlev=0, maxlev=self.croco.wrapper.N-1, \
-                        	lonindex=self.lonIndex)
+                            minlev=0, maxlev=self.croco.wrapper.N-1, \
+                            lonindex=self.lonIndex)
                 
                     elif self.variableName == 'dtdz':
                         variable[it,1:,:] = get_dtdz(self.croco,self.timeIndex, \
-                        	minlev=0, maxlev=self.croco.wrapper.N-1, \
-                        	lonindex=self.lonIndex)
+                            minlev=0, maxlev=self.croco.wrapper.N-1, \
+                            lonindex=self.lonIndex)
                 
             # Get Latitude coordinates
             x = self.croco.get_coord(self.variableName, direction='y')
@@ -1474,6 +1481,7 @@ class CrocoGui(wx.Frame):
                 timeIndex=self.timeIndex)
             # Draw the plot
             self.sectionYZ.updateVariableZ()
+            self.sectionYZ.drawz()
 
 
 # end of class CrocoGui
@@ -1481,6 +1489,16 @@ class CrocoGui(wx.Frame):
 
 # Run the program
 if __name__ == "__main__":
+    import ctypes 
+    import sys 
+    if sys.platform.startswith('linux'): 
+     try:
+        print(ctypes.x)
+        sys.exit()
+        x11 = ctypes.cdll.LoadLibrary('libX11.so') 
+        x11.XInitThreads() 
+     except: 
+        print "Warning: failed to XInitThreads()" 
     app = wx.App(False)
     frame = CrocoGui()
     frame.Show()
