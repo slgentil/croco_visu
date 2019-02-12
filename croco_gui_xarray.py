@@ -265,7 +265,7 @@ class SectionFrame(wx.Frame):
     def onstartTimeTxt(self,event):
         """Event handler for Enter key in start time text """
         self.startTime = float(self.startTimeTxt.GetValue())
-        times = self.croco.wrapper.coords['time'].values
+        times = self.croco.get_coord(self.variableName, direction='t')
         # find nearest index corresponding to instant time to plot
         self.startTimeIndex = min( range( len(times) ), \
             key=lambda j:abs(self.startTime-times[j]))
@@ -276,7 +276,7 @@ class SectionFrame(wx.Frame):
     def onendTimeTxt(self,event):
         """Event handler for Enter key in end time text """
         self.endTime = float(self.endTimeTxt.GetValue())
-        times = self.croco.wrapper.coords['time'].values
+        times = self.croco.get_coord(self.variableName, direction='t')
         # find nearest index corresponding to instant time to plot
         self.endTimeIndex = min( range( len(times) ), \
             key=lambda j:abs(self.endTime-times[j]))
@@ -286,7 +286,7 @@ class SectionFrame(wx.Frame):
     def onTimeTxt(self,event):
         """Event handler for Enter key in end time text """
         time = float(self.TimeTxt.GetValue())
-        times = self.croco.wrapper.coords['time'].values
+        times = self.croco.get_coord(self.variableName, direction='t')
         # find index corresponding to the nearest instant time to plot
         self.timeIndex = min( range( len(times) ), \
             key=lambda j:abs(time-times[j]))
@@ -364,8 +364,6 @@ class SectionFrame(wx.Frame):
             self.variableZ = self.variable.isel(t=self.timeIndex)
         except:
             return
-        # self.drawz(setlim=setlim)
-
 
     def drawz(self, setlim=True, anim=False):
         """ plot the current variable in the canvas """
@@ -868,7 +866,7 @@ class CrocoGui(wx.Frame):
 
     def onTimeTxt(self,event):
         time = float(self.TimeTxt.GetValue())
-        times = self.croco.wrapper.coords['time'].values
+        times = self.croco.get_coord(self.variableName, direction='t')
         # find index corresponding to the nearest instant time to plot
         self.timeIndex = min( range( len(times) ), \
             key=lambda j:abs(time-times[j]))
@@ -898,8 +896,7 @@ class CrocoGui(wx.Frame):
             self.levelIndex = min(int(depth-1),self.croco.wrapper.N - 1)
             self.LevelTxt.SetValue(str(self.levelIndex + 1))
         else:
-            ssh = self.croco.variables['ssh'].isel(t=self.timeIndex).values
-            z = self.croco.wrapper.scoord2z_r(ssh, alpha=0., beta=0)
+            z = self.croco.get_coord(self.variableName, direction='z', timeIndex=self.timeIndex)
             self.levelIndex = np.argmax(z[:,self.latIndex,self.lonIndex]>=depth)
         self.updateVariableXY()
         self.drawxy(setlim=False)
@@ -970,7 +967,7 @@ class CrocoGui(wx.Frame):
         # mask = np.where(mask==0.,np.nan,mask)
 
         # Get x coordinate: time
-        x = self.croco.wrapper.coords['time'].values.astype('timedelta64[D]').astype('float')
+        x = self.croco.get_coord(self.variableName, direction='t').astype('timedelta64[D]').astype('float')
         
         # Time series on level    
         if depth > 0:
@@ -1002,15 +999,9 @@ class CrocoGui(wx.Frame):
             y = np.zeros_like(x)
             # recalculate the depth slice at each time step
             for it in range(len(x)):
-                # Calculate z        
-                ssh = self.croco.variables['ssh'].isel(t=self.timeIndex).values
-                if self.variableName=="u":
-                    z = self.croco.wrapper.scoord2z_u(ssh, alpha=0., beta=0)
-                elif self.variableName=="v":
-                    z = self.croco.wrapper.scoord2z_v(ssh, alpha=0., beta=0)
-                else :
-                    z = self.croco.wrapper.scoord2z_r(ssh, alpha=0., beta=0)
-
+                # Calculate z    
+                z = self.croco. get_coord(self.variableName, direction='z', timeIndex=self.timeIndex)   
+                
                 if self.variableName in self.croco.ListOfVariables:    
                     # Find levels around depth
                     maxlev = np.argmax(z[:,self.latIndex,self.lonIndex]>=depth)
@@ -1018,8 +1009,12 @@ class CrocoGui(wx.Frame):
                     z1 = z[minlev,self.latIndex,self.lonIndex]
                     z2 = z[maxlev,self.latIndex,self.lonIndex]
                     # read variable and do interpolation
-                    var = self.croco.variables[self.variableName].isel(t=it, \
-                             z_r=slice(minlev,maxlev+1))[:,self.latIndex,self.lonIndex]
+                    try:
+                        var = self.croco.variables[self.variableName].isel(t=it, \
+                                 z_r=slice(minlev,maxlev+1))[:,self.latIndex,self.lonIndex]
+                    except:
+                        var = self.croco.variables[self.variableName].isel(t=it, \
+                                 z_w=slice(minlev,maxlev+1))[:,self.latIndex,self.lonIndex]
                     y[it]=((var[0]-var[1])*depth+var[1]*z1-var[0]*z2)/(z1-z2) 
             
                 elif self.variableName in self.croco.ListOfDerived:
@@ -1084,13 +1079,8 @@ class CrocoGui(wx.Frame):
         title="{:s}, Lon={:4.1f}, Lat={:4.1f}, Time={:s}".\
             format(self.variableName,self.lon,self.lat,time)
         # Get depths coordinate
-        ssh = self.croco.variables['ssh'].isel(t=self.timeIndex).values
-        if self.variableName=="u":
-            z = self.croco.wrapper.scoord2z_u(ssh, alpha=0., beta=0)[:,self.latIndex,self.lonIndex]
-        elif self.variableName=="v":
-            z = self.croco.wrapper.scoord2z_v(ssh, alpha=0., beta=0)[:,self.latIndex,self.lonIndex]
-        else :
-            z = self.croco.wrapper.scoord2z_r(ssh, alpha=0., beta=0)[:,self.latIndex,self.lonIndex]
+        z = self.croco. get_coord(self.variableName, direction='z', \
+            timeIndex=self.timeIndex)[:,self.latIndex,self.lonIndex] 
 
         # Get variable profile
         if self.variableName in self.croco.ListOfVariables: 
@@ -1179,7 +1169,7 @@ class CrocoGui(wx.Frame):
 
     def onstartTimeTxt(self,event):
         self.startTime = float(self.startTimeTxt.GetValue())
-        times = self.croco.wrapper.coords['time'].values
+        times = self.croco.get_coord(self.variableName, direction='t')
         # find index corresponding to instant time to plot
         self.startTimeIndex = min( range( len(times) ), \
             key=lambda j:abs(self.startTime-times[j]))
@@ -1188,7 +1178,7 @@ class CrocoGui(wx.Frame):
 
     def onendTimeTxt(self,event):
         self.endTime = float(self.endTimeTxt.GetValue())
-        times = self.croco.wrapper.coords['time'].values
+        times = self.croco.get_coord(self.variableName, direction='t')
         # find index corresponding to instant time to plot
         self.endTimeIndex = min( range( len(times) ), \
             key=lambda j:abs(self.endTime-times[j]))
@@ -1228,8 +1218,6 @@ class CrocoGui(wx.Frame):
 
     def findLatLonIndex(self, lonValue, latValue):
         ''' Find nearest  grid point of  click value '''
-        # a = abs(self.croco.wrapper.coords['lon_r'].values - lonValue) + \
-        #     abs(self.croco.wrapper.coords['lat_r'].values - latValue)
         a = abs(self.croco.wrapper.coords['lon_r'] - lonValue) + \
             abs(self.croco.wrapper.coords['lat_r'] - latValue)
         return np.unravel_index(a.argmin(),a.shape)
@@ -1262,10 +1250,16 @@ class CrocoGui(wx.Frame):
             self.levelIndex = int(self.LevelTxt.GetValue()) - 1
             self.depth = self.levelIndex + 1
             if self.variableName in self.croco.ListOfVariables:
+                # 3D variable rho level
                 try:
                     self.variableXY = self.croco.variables[self.variableName].isel(t=self.timeIndex,z_r=self.levelIndex)
                 except:
-                    self.variableXY = self.croco.variables[self.variableName].isel(t=self.timeIndex)
+                    # 3D variable w level
+                    try:
+                        self.variableXY = self.croco.variables[self.variableName].isel(t=self.timeIndex,z_w=self.levelIndex)
+                    # 2D variable
+                    except:
+                        self.variableXY = self.croco.variables[self.variableName].isel(t=self.timeIndex)
 
             elif self.variableName in self.croco.ListOfDerived:
                 if 'pv' in self.variableName:
@@ -1290,19 +1284,16 @@ class CrocoGui(wx.Frame):
         elif depth <= 0:
             self.depth = depth
             # Calculate depths 
-            ssh = self.croco.variables['ssh'].isel(t=self.timeIndex).values
-            if self.variableName=="u":
-                z = self.croco.wrapper.scoord2z_u(ssh, alpha=0., beta=0)
-            elif self.variableName=="v":
-                z = self.croco.wrapper.scoord2z_v(ssh, alpha=0., beta=0)
-            else :
-                z = self.croco.wrapper.scoord2z_r(ssh, alpha=0., beta=0)
+            z = self.croco.get_coord(self.variableName, direction='z', timeIndex=self.timeIndex)
             minlev,maxlev = self.croco.zslice(None,mask,z,depth,findlev=True)
 
 
             # Variable from croco file
-            if self.variableName in self.croco.ListOfVariables:      
-                var = self.croco.variables[self.variableName].isel(t=self.timeIndex, z_r=slice(minlev,maxlev+1))
+            if self.variableName in self.croco.ListOfVariables:   
+                try:   
+                    var = self.croco.variables[self.variableName].isel(t=self.timeIndex, z_r=slice(minlev,maxlev+1))
+                except:
+                    var = self.croco.variables[self.variableName].isel(t=self.timeIndex, z_w=slice(minlev,maxlev+1))
                 try:
                     zslice = self.croco.zslice(var.values,mask,z[minlev:maxlev+1,:,:],depth)[0]
                     self.variableXY = xr.DataArray(data=zslice)
@@ -1364,15 +1355,8 @@ class CrocoGui(wx.Frame):
 
         time = str(self.croco.wrapper._get_date(self.timeIndex))
         depth = float(self.LevelTxt.GetValue())
-        if self.variableName=="u":
-            lon = self.croco.wrapper.coords['lon_u']
-            lat = self.croco.wrapper.coords['lat_u']
-        elif self.variableName=="v":
-            lon = self.croco.wrapper.coords['lon_v']
-            lat = self.croco.wrapper.coords['lat_v']
-        else:
-            lon = self.croco.wrapper.coords['lon_r']
-            lat = self.croco.wrapper.coords['lat_r']
+        lon = self.croco.get_coord(self.variableName, direction='x')
+        lat = self.croco.get_coord(self.variableName, direction='y')
 
         if depth > 0:
             self.title = "{:s}, Level={:4d}, Time={:s}".format(self.variableName,self.levelIndex+1,time)
@@ -1396,9 +1380,7 @@ class CrocoGui(wx.Frame):
         ''' Extract the  rigth section for the current variable and plot in a new window '''
 
         # Latitude section
-        if typSection == "XZ":        
-            ssh = self.croco.variables['ssh'].isel(t=self.timeIndex,\
-                            y_r=slice(self.latIndex-1,self.latIndex+2)).values
+        if typSection == "XZ": 
 
             # Variable from croco file
             if self.variableName in self.croco.ListOfVariables:
@@ -1426,17 +1408,13 @@ class CrocoGui(wx.Frame):
                             minlev=0, maxlev=self.croco.wrapper.N-1, \
                             latindex=self.latIndex)
                 
+            # Get depths coordinates
+            y = self.croco.get_coord(self.variableName, direction='z', \
+                timeIndex=self.timeIndex)[:,self.latIndex,:]
             # Get Longitude coordinates
             x = self.croco.get_coord(self.variableName, direction='x')
-            x = repmat(x[self.latIndex,:].squeeze(),self.croco.wrapper.N,1)
-            # Get depths coordinates
-            if self.variableName=="u":
-                y = np.squeeze(self.croco.wrapper.scoord2z_u(ssh, alpha=0., beta=0, latindex=self.latIndex)[:,1:-1,:])
-            elif self.variableName=="v":
-                y = np.squeeze(self.croco.wrapper.scoord2z_v(ssh, alpha=0., beta=0, latindex=self.latIndex)[:,1:,:])
-            else :
-                y = np.squeeze(self.croco.wrapper.scoord2z_r(ssh, alpha=0., beta=0, latindex=self.latIndex)[:,1:-1,:])
-            # Create new window
+            x = repmat(x[self.latIndex,:].squeeze(),y.shape[0],1)            # Create new window
+            
             self.sectionXZ = SectionFrame(\
                 croco=self.croco, \
                 variableName = self.variableName, \
@@ -1450,9 +1428,7 @@ class CrocoGui(wx.Frame):
             self.sectionXZ.drawz()
 
         # Longitude section
-        elif typSection == "YZ":       
-            ssh = self.croco.variables['ssh'].isel(t=self.timeIndex,\
-                          x_r=slice(self.lonIndex-1,self.lonIndex+2)).values
+        elif typSection == "YZ":     
 
             # Variable from croco file
             if self.variableName in self.croco.ListOfVariables:
@@ -1480,16 +1456,12 @@ class CrocoGui(wx.Frame):
                             minlev=0, maxlev=self.croco.wrapper.N-1, \
                             lonindex=self.lonIndex)
                 
+            # Get depths coordinates
+            y = self.croco.get_coord(self.variableName, direction='z', \
+                timeIndex=self.timeIndex)[:,:,self.lonIndex]
             # Get Latitude coordinates
             x = self.croco.get_coord(self.variableName, direction='y')
-            x = repmat(x[:,self.lonIndex].squeeze(),self.croco.wrapper.N,1)
-            # Get depths coordinates
-            if self.variableName=="u":
-                y = np.squeeze(self.croco.wrapper.scoord2z_u(ssh, alpha=0., beta=0, lonindex=self.lonIndex)[:,:,1:])
-            elif self.variableName=="v":
-                y = np.squeeze(self.croco.wrapper.scoord2z_v(ssh, alpha=0., beta=0, lonindex=self.lonIndex)[:,:,1:-1])
-            else :
-                y = np.squeeze(self.croco.wrapper.scoord2z_r(ssh, alpha=0., beta=0, lonindex=self.lonIndex)[:,:,1:-1])
+            x = repmat(x[:,self.lonIndex].squeeze(),y.shape[0],1)
             # Create new window
             self.sectionYZ = SectionFrame(\
                 croco=self.croco, \

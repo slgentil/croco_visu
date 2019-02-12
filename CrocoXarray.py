@@ -122,7 +122,7 @@ class Croco(object):
         return variable
 
 
-    def get_coord(self,variableName, direction=None):
+    def get_coord(self,variableName, direction=None, timeIndex=None):
         """
         get coordinate corresponding of the variable depending on the direction
         direction : 'x', 'y', 't'
@@ -146,7 +146,7 @@ class Croco(object):
                 return  self.wrapper.coords['lon_r']
             elif coord[0].find('w') >=0 :
                 return  self.wrapper.coords['lon_w']
-        if direction == 'y':
+        elif direction == 'y':
             regex=re.compile(".*(y_).*")
             coord = [m.group(0) for l in list for m in [regex.search(l)] if m]
             if coord[0].find('u') >=0 :
@@ -157,7 +157,20 @@ class Croco(object):
                 return  self.wrapper.coords['lat_r']
             elif coord[0].find('w') >=0 :
                 return  self.wrapper.coords['lat_w']
-        if direction == 't':
+        elif direction == 'z':    
+            ssh = self.variables['ssh'].isel(t=timeIndex).values
+            regex=re.compile(".*(z_).*")
+            coord = [m.group(0) for l in list for m in [regex.search(l)] if m]
+            if coord[0].find('r') >=0 :                
+            	z = self.wrapper.scoord2z_r(ssh, alpha=0., beta=0)
+            elif coord[0].find('w') >=0 :
+            	z = self.wrapper.scoord2z_w(ssh, alpha=0., beta=0)
+            if variableName=="u":
+                z = self.rho2u_3d(z)
+            elif variableName=="v":
+                z = self.rho2v_3d(z)
+            return(z)
+        elif direction == 't':
             return  self.wrapper.coords['time'].values
 
     def create_DataArray(self, data=None, dimstyp='xyzt'):
