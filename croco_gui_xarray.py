@@ -1394,17 +1394,17 @@ class CrocoGui(wx.Frame):
                 variable = self.croco.create_DataArray(data=np.zeros((ntimes,N,L)), dimstyp='xzt')
                 for it in range(ntimes):
                     if 'pv' in self.variableName:
-                        variable[it,1:,:] = get_pv(self.croco,self.timeIndex, \
+                        variable[it,1:,:] = get_pv(self.croco,it, \
                             minlev=0, maxlev=self.croco.wrapper.N-1,\
                             latindex=self.latIndex, typ=self.variableName)
                 
                     elif self.variableName == 'zeta_k':
-                        variable[it,1:,:] = get_zetak(self.croco,self.timeIndex, \
+                        variable[it,1:,:] = get_zetak(self.croco,it, \
                             minlev=0, maxlev=self.croco.wrapper.N-1, \
                             latindex=self.latIndex)
                 
                     elif self.variableName == 'dtdz':
-                        variable[it,1:,:] = get_dtdz(self.croco,self.timeIndex, \
+                        variable[it,1:,:] = get_dtdz(self.croco,it, \
                             minlev=0, maxlev=self.croco.wrapper.N-1, \
                             latindex=self.latIndex)
                 
@@ -1442,17 +1442,17 @@ class CrocoGui(wx.Frame):
                 variable = self.croco.create_DataArray(data=np.zeros((ntimes,N,M)), dimstyp='yzt')
                 for it in range(ntimes):
                     if 'pv' in self.variableName:
-                        variable[it,1:,:] = get_pv(self.croco,self.timeIndex, \
+                        variable[it,1:,:] = get_pv(self.croco,it, \
                             minlev=0, maxlev=self.croco.wrapper.N-1, \
                             lonindex=self.lonIndex,typ=self.variableName)
                 
                     elif self.variableName == 'zeta_k':
-                        variable[it,1:,:] = get_zetak(self.croco,self.timeIndex, \
+                        variable[it,1:,:] = get_zetak(self.croco,it, \
                             minlev=0, maxlev=self.croco.wrapper.N-1, \
                             lonindex=self.lonIndex)
                 
                     elif self.variableName == 'dtdz':
-                        variable[it,1:,:] = get_dtdz(self.croco,self.timeIndex, \
+                        variable[it,1:,:] = get_dtdz(self.croco,it, \
                             minlev=0, maxlev=self.croco.wrapper.N-1, \
                             lonindex=self.lonIndex)
                 
