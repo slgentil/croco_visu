@@ -199,7 +199,7 @@ class CrocoWrapper(object):
             except:
                 mask_rho = np.ones_like(self.coords['lon_r'])
                 self.masks[val] = xr.DataArray(data=mask_rho)
-            self.masks[val] = np.where(self.masks[val]==0.,np.nan,self.masks[val])
+            # self.masks[val] = np.where(self.masks[val]==0.,np.nan,self.masks[val])
 
     def define_variables(self):
     	ds = return_xarray_dataset(self.keymap_files['variable_file'])

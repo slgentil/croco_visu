@@ -1270,7 +1270,7 @@ class CrocoGui(wx.Frame):
                     self.variableXY = xr.DataArray(data=var)
                 elif self.variableName == 'dtdz':
                     try:
-                        croco.variables['temp']
+                        self.croco.variables['temp']
                         var = get_dtdz(self.croco,self.timeIndex, depth=depth)
                         self.variableXY = xr.DataArray(data=var)
                     except:
