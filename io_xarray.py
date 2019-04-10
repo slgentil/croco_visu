@@ -1,10 +1,9 @@
 import xarray as xr
 
-#
-#--------------------- Creation of xarray objects ------------------------------
-#
+# Creation of xarray objects
 
-def return_xarray_dataset(filename,chunks=None,decode_times=True,**kwargs):
+
+def return_xarray_dataset(filename, chunks=None, decode_times=True, **kwargs):
     """Return an xarray dataset corresponding to filename.
     Parameters
     ----------
@@ -16,9 +15,10 @@ def return_xarray_dataset(filename,chunks=None,decode_times=True,**kwargs):
     -------
     ds : xarray.Dataset
     """
-    return xr.open_dataset(filename,chunks=chunks,**kwargs)
+    return xr.open_dataset(filename, chunks=chunks, **kwargs)
 
-def return_xarray_mfdataset(filename,chunks=None,**kwargs):
+
+def return_xarray_mfdataset(filename, chunks=None, **kwargs):
     """Return an xarray dataset corresponding to filename which may include
     wildcards (e.g. file_*.nc).
     Parameters
@@ -32,9 +32,10 @@ def return_xarray_mfdataset(filename,chunks=None,**kwargs):
     ------
     ds : xarray.Dataset
     """
-    return xr.open_mfdataset(filename,chunks=chunks,**kwargs)
+    return xr.open_mfdataset(filename, chunks=chunks, **kwargs)
 
-def return_xarray_dataarray(ds,varname,chunks=None,**extra_kwargs):
+
+def return_xarray_dataarray(ds, varname, chunks=None, **extra_kwargs):
     """Return a xarray dataarray corresponding to varname in filename.
     Parameters
     ----------
@@ -53,7 +54,7 @@ def return_xarray_dataarray(ds,varname,chunks=None,**extra_kwargs):
     # ds = return_xarray_dataset(filename,chunks=chunks)
     try:
         dataarray = ds[varname]
-    except:
+    except Exception:
         dataarray = ds.attrs[varname]
     for kwargs in extra_kwargs:
         dataarray.attrs[kwargs] = extra_kwargs[kwargs]
