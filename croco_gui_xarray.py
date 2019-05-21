@@ -126,7 +126,7 @@ class SectionFrame(wx.Frame):
         self.sliceIndex = sliceIndex
         self.timeIndex = timeIndex
         if croco is not None:
-            self.time = self.croco.wrapper._get_date(0)
+            self.time = self.croco.wrapper._get_date(self.timeIndex)
             self.TimeTxt.SetValue(str(self.time))
         if typSection == "XZ":
             self.xlabel = "Longitude"
@@ -353,20 +353,20 @@ class SectionFrame(wx.Frame):
         """
         Event handler for the button click Reset Color button
         """
-        self.clim = [np.min(self.variableZ), np.max(self.variableZ)]
-        self.MinColorTxt.SetValue('%.2E' % self.clim[0])
-        self.MaxColorTxt.SetValue('%.2E' % self.clim[1])
+        # self.clim = [np.min(self.variableZ), np.max(self.variableZ)]
+        # self.MinColorTxt.SetValue('%.2E' % self.clim[0])
+        # self.MaxColorTxt.SetValue('%.2E' % self.clim[1])
         self.drawz(setlim=False)
 
     def onMinColorTxt(self, event):
         """Event handler for Enter key in Min Color text """
         self.clim[0] = float(self.MinColorTxt.GetValue())
-        self.drawz(setlim=False)
+        self.drawz(setlim=False, setcol=False)
 
     def onMaxColorTxt(self, event):
         """Event handler for Enter key in Max Color text """
         self.clim[1] = float(self.MaxColorTxt.GetValue())
-        self.drawz(setlim=False)
+        self.drawz(setlim=False, setcol=False)
 
     #  Methods of class
 
@@ -921,19 +921,19 @@ class CrocoGui(wx.Frame):
         self.drawxy()
 
     def onResetColorBtn(self, event):
-        variableXY = ma.masked_invalid(self.variableXY.values)
-        self.clim = [np.min(variableXY), np.max(variableXY)]
-        self.MinColorTxt.SetValue('%.2E' % self.clim[0])
-        self.MaxColorTxt.SetValue('%.2E' % self.clim[1])
+        # variableXY = ma.masked_invalid(self.variableXY.values)
+        # self.clim = [np.min(variableXY), np.max(variableXY)]
+        # self.MinColorTxt.SetValue('%.2E' % self.clim[0])
+        # self.MaxColorTxt.SetValue('%.2E' % self.clim[1])
         self.drawxy(setlim=False)
 
     def onMinColorTxt(self, event):
         self.clim[0] = float(self.MinColorTxt.GetValue())
-        self.drawxy(setlim=False)
+        self.drawxy(setlim=False, setcol=False)
 
     def onMaxColorTxt(self, event):
         self.clim[1] = float(self.MaxColorTxt.GetValue())
-        self.drawxy(setlim=False)
+        self.drawxy(setlim=False, setcol=False)
 
     def onTimeMinusBtn(self, event):
         self.timeIndex = max(self.timeIndex - 1, 0)
