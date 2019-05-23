@@ -332,7 +332,7 @@ class SectionFrame(wx.Frame):
         """
         Event handler for the button click Zoom out button
         """
-        self.drawz(setcol=False)
+        self.drawz(setlim=True, setcol=False)
         # self.toolbar.home()
 
     # Event handler for Print
@@ -356,7 +356,7 @@ class SectionFrame(wx.Frame):
         # self.clim = [np.min(self.variableZ), np.max(self.variableZ)]
         # self.MinColorTxt.SetValue('%.2E' % self.clim[0])
         # self.MaxColorTxt.SetValue('%.2E' % self.clim[1])
-        self.drawz(setlim=False)
+        self.drawz(setlim=False, setcol=True)
 
     def onMinColorTxt(self, event):
         """Event handler for Enter key in Min Color text """
@@ -441,7 +441,7 @@ class SectionFrame(wx.Frame):
                                                      maxlev=self.croco.wrapper.N - 1,
                                                      lonindex=self.sliceIndex)
 
-    def drawz(self, setlim=True, setcol=True, anim=False):
+    def drawz(self, setlim=False, setcol=False, anim=False):
         """ plot the current variable in the canvas """
         self.figure.clf()
         self.canvas.mpl_connect('button_press_event', self.onFigureClick)
@@ -911,21 +911,21 @@ class CrocoGui(wx.Frame):
         self.variableName = self.CrocoVariableChoice.GetString(self.CrocoVariableChoice.GetSelection())
         self.DerivedVariableChoice.SetSelection(0)
         self.updateVariableXY()
-        self.drawxy()
+        self.drawxy(setlim=True, setcol=True)
 
     def onDerivedVariableChoice(self, event):
         ''' Choose a computed variable to plot '''
         self.variableName = self.DerivedVariableChoice.GetString(self.DerivedVariableChoice.GetSelection())
         self.CrocoVariableChoice.SetSelection(0)
         self.updateVariableXY()
-        self.drawxy()
+        self.drawxy(setlim=True, setcol=True)
 
     def onResetColorBtn(self, event):
         # variableXY = ma.masked_invalid(self.variableXY.values)
         # self.clim = [np.min(variableXY), np.max(variableXY)]
         # self.MinColorTxt.SetValue('%.2E' % self.clim[0])
         # self.MaxColorTxt.SetValue('%.2E' % self.clim[1])
-        self.drawxy(setlim=False)
+        self.drawxy(setlim=False, setcol=True)
 
     def onMinColorTxt(self, event):
         self.clim[0] = float(self.MinColorTxt.GetValue())
@@ -1042,12 +1042,14 @@ class CrocoGui(wx.Frame):
             dims = self.croco.variables[self.variableName].dims
         except Exception:
             dims = []
-        mask = self.croco.wrapper.masks['mask_r']
+
         if "x_u" in dims:
-            mask = self.croco.rho2u_2d(mask)
+            mask = self.croco.umask()
         elif "y_v" in dims:
-            mask = self.croco.rho2v_2d(mask)
-        # mask = np.where(mask==0.,np.nan,mask)
+            mask = self.croco.vmask()
+        else:
+            mask = self.croco.rmask()
+        # mask = np.where(mask == 0., np.nan, mask)
 
         # Get x coordinate: time
         x = self.croco.get_coord(self.variableName, direction='t').astype('timedelta64[D]').astype('float')
@@ -1287,7 +1289,7 @@ class CrocoGui(wx.Frame):
         #              np.max(self.croco.wrapper.coords['lon_r'])]
         # self.ylim = [np.min(self.croco.wrapper.coords['lat_r']), \
         #              np.max(self.croco.wrapper.coords['lat_r'])]
-        self.drawxy(setcol=False)
+        self.drawxy(setlim=True, setcol=False)
         # self.toolbar.home()
 
     def onSavePlotBtn(self, event):
@@ -1322,11 +1324,12 @@ class CrocoGui(wx.Frame):
             depth = self.croco.wrapper.N
             self.LevelTxt.SetValue(str(depth))
 
-        mask = self.croco.wrapper.masks['mask_r']
         if "x_u" in dims:
-            mask = self.croco.rho2u_2d(mask)
+            mask = self.croco.umask()
         elif "y_v" in dims:
-            mask = self.croco.rho2v_2d(mask)
+            mask = self.croco.vmask()
+        else:
+            mask = self.croco.rmask()
         mask = np.where(mask == 0., np.nan, mask)
 
         # Level plot
@@ -1418,9 +1421,8 @@ class CrocoGui(wx.Frame):
                         pass
         # Draw the new self.variableXY
         self.variableXY.values = mask * self.variableXY.values
-        # self.drawxy(setlim=setlim)
 
-    def drawxy(self, setlim=True, setcol=True, anim=False):
+    def drawxy(self, setlim=False, setcol=False, anim=False):
         ''' Draw the current variable self.variableXY in the canvas of the main window '''
         self.figure.clf()
         # Prepare the canvas to receive click events
@@ -1517,7 +1519,7 @@ class CrocoGui(wx.Frame):
                                           timeIndex=self.timeIndex)
             # Draw the plot
             self.sectionXZ.updateVariableZ()
-            self.sectionXZ.drawz()
+            self.sectionXZ.drawz(setlim=True, setcol=True)
 
         # Longitude section
         elif typSection == "YZ":
@@ -1565,7 +1567,7 @@ class CrocoGui(wx.Frame):
                                           timeIndex=self.timeIndex)
             # Draw the plot
             self.sectionYZ.updateVariableZ()
-            self.sectionYZ.drawz()
+            self.sectionYZ.drawz(setlim=True, setcol=True)
 
 
 # end of class CrocoGui

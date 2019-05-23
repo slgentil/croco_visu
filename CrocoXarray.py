@@ -254,6 +254,18 @@ class Croco(object):
             runName = os.path.basename(os.path.dirname(filename[:index]))
         return runName
 
+
+    def rmask(self):
+        return(self.wrapper.masks['mask_r'])
+
+    def umask(self):
+        return(self.wrapper.masks['mask_r'][:, 1:] *
+               self.wrapper.masks['mask_r'][:, :-1])
+
+    def vmask(self):
+        return(self.wrapper.masks['mask_r'][1:, :] *
+               self.wrapper.masks['mask_r'][:-1, :])
+        
     @staticmethod
     def rho2u_2d(rho_in):
         '''
