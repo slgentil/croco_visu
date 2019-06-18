@@ -351,17 +351,25 @@ class CrocoWrapper(object):
         '''
         Depths at u point
         '''
-        depth = self._scoord2z('r', ssh=ssh, alpha=alpha, beta=beta,
-                               lonindex=lonindex, latindex=latindex)[0]
-        return 0.5 * (depth[:, :, :-1] + depth[:, :, 1:])
+        depth = self._scoord2z('r', ssh=ssh, alpha=alpha, beta=beta)[0]
+        if lonindex is not None:
+            return np.squeeze(0.5 * (depth[:, :, lonindex] + depth[:, :, lonindex - 1]))
+        elif latindex is not None:
+            return np.squeeze(0.5 * (depth[:, latindex, 1:] + depth[:, latindex, :-1]))
+        else:
+            return np.squeeze(0.5 * (depth[:, :, :-1] + depth[:, :, 1:]))
 
     def scoord2z_v(self, ssh=0., alpha=0., beta=1., lonindex=None, latindex=None):
         '''
         Depths at v point
         '''
-        depth = self._scoord2z('r', ssh=ssh, alpha=alpha, beta=beta,
-                               lonindex=lonindex, latindex=latindex)[0]
-        return 0.5 * (depth[:, :-1, :] + depth[:, 1:, :])
+        depth = self._scoord2z('r', ssh=ssh, alpha=alpha, beta=beta)[0]
+        if lonindex is not None:
+            return np.squeeze(0.5 * (depth[:, 1:, lonindex] + depth[:, :-1, lonindex]))
+        elif latindex is not None:
+            return np.squeeze(0.5 * (depth[:, latindex, :] + depth[:, latindex - 1, :]))
+        else:
+            return np.squeeze(0.5 * (depth[:, :-1, :] + depth[:, 1:, :]))
 
     def scoord2dz_r(self, ssh=0., alpha=0., beta=1., lonindex=None, latindex=None):
         """
@@ -371,19 +379,27 @@ class CrocoWrapper(object):
                             lonindex=lonindex, latindex=latindex)[0]
         return dz[1:] - dz[:-1]
 
+    def scoord2dz_w(self, ssh=0., alpha=0., beta=1., lonindex=None, latindex=None):
+        """
+        dz at rho points, 3d matrix
+        """
+        dz = self._scoord2z('r', ssh=ssh, alpha=alpha, beta=beta,
+                            lonindex=lonindex, latindex=latindex)[0]
+        return dz[1:] - dz[:-1]
+
     def scoord2dz_u(self, ssh=0., alpha=0., beta=1., lonindex=None, latindex=None):
         '''
         dz at u points, 3d matrix
         '''
-        dz = self.scoord2dz(ssh=ssh, alpha=0., beta=1., lonindex=lonindex, latindex=latindex)
-        return 0.5 * (dz[:, :, :-1] + dz[:, :, 1:])
+        dz = self.scoord2z_u(ssh=ssh, alpha=0., beta=1., lonindex=None, latindex=latindex)
+        return dz[1:] - dz[:-1]
 
     def scoord2dz_v(self, ssh=0., alpha=0., beta=1., lonindex=None, latindex=None):
         '''
         dz at v points
         '''
-        dz = self.scoord2dz(ssh=ssh, alpha=0., beta=1., lonindex=lonindex, latindex=latindex)
-        return 0.5 * (dz[:, :-1, :] + dz[:, 1:, :])
+        dz = self.scoord2z_v(ssh=ssh, alpha=0., beta=1., lonindex=lonindex, latindex=latindex)
+        return dz[1:] + dz[:-1]
 
 
 # Run the program

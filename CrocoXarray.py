@@ -36,7 +36,7 @@ class Croco(object):
         self.ListOfVariables = self.list_of_variables()
         self.ListOfDerived = self.list_of_derived()
 
-        self.rho0 = 1025.
+        self.rho0 = 1027.
         self.g = 9.81
 
     def list_of_variables(self):
@@ -63,6 +63,7 @@ class Croco(object):
         keys.append('pv_ijk')
         keys.append('zeta_k')
         keys.append('dtdz')
+        keys.append('log(Ri)')
         return keys
 
     def get_variable(self, variableName, tindex=None, xindex=None, yindex=None, zindex=None):
