@@ -610,6 +610,8 @@ class SectionFrame(wx.Frame):
             self.MaxColorTxt.SetValue('%.2E' % self.maxcolor)
             self.clim = [self.mincolor, self.maxcolor]
         if self.variableName == 'log(Ri)':
+            self.MinColorTxt.SetValue('%.2E' % -3.2)
+            self.MaxColorTxt.SetValue('%.2E' % 2.)
             self.clim = [-3.2, 2.]
         if setlim:
             self.xlim = [np.min(self.x), np.max(self.x)]
