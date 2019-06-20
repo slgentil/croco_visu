@@ -395,16 +395,6 @@ class SectionFrame(wx.Frame):
             except Exception:
                 dims = []
 
-            # # if 2D variable, reset level
-            # if len(dims) == 3:
-            #     # depth = self.croco.wrapper.N
-            #     # self.LevelTxt.SetValue(str(depth))
-            #     longitude = latitude = None
-            #     self.sliceCoord = self.croco.wrapper.N
-            #     self.sliceIndex = self.croco.wrapper.N - 1
-            #     # send new location to main window
-            #     self.pub.dispatch(self.sliceCoord, longitude, latitude)
-
             if "x_u" in dims:
                 mask = self.croco.umask()
             elif "y_v" in dims:
@@ -514,7 +504,6 @@ class SectionFrame(wx.Frame):
             self.variableZ.values = mask * self.variableZ.values
 
 
-
         # Latitude section
         elif self.typSection == "XZ":
 
@@ -528,7 +517,7 @@ class SectionFrame(wx.Frame):
                 # ntimes = self.croco.wrapper.ntimes
                 N = self.croco.wrapper.N
                 L = self.croco.wrapper.L
-                self.variableZ = self.croco.create_DataArray(data=np.zeros((N, L)),
+                self.variableZ = self.croco.create_DataArray(data=np.full((N, L),np.nan),
                                                              dimstyp='xz')
                 if 'pv' in self.variableName:
                     self.variableZ[1:, :] = get_pv(self.croco, self.timeIndex,
@@ -568,7 +557,7 @@ class SectionFrame(wx.Frame):
                 # ntimes = self.croco.wrapper.ntimes
                 N = self.croco.wrapper.N
                 M = self.croco.wrapper.M
-                self.variableZ = self.croco.create_DataArray(data=np.zeros((N, M)),
+                self.variableZ = self.croco.create_DataArray(data=np.full((N, M),np.nan),
                                                              dimstyp='yz')
                 if 'pv' in self.variableName:
                     self.variableZ[1:, :] = get_pv(self.croco, self.timeIndex,
@@ -598,10 +587,15 @@ class SectionFrame(wx.Frame):
 
     def drawz(self, setlim=False, setcol=False, anim=False):
         """ plot the current variable in the canvas """
+
+        # Don't plot if variable full of Nan
+        if np.count_nonzero(~np.isnan(self.variableZ.values)) == 0: return
+
         self.figure.clf()
         self.canvas.mpl_connect('button_press_event', self.onFigureClick)
         self.canvas.mpl_connect('motion_notify_event', self.ShowPosition)
 
+        # if self.variableZ.values is None: return
         variableZ = ma.masked_invalid(self.variableZ.values)
         if setcol:
             self.mincolor = np.min(variableZ)
@@ -771,6 +765,10 @@ class ProfileFrame(wx.Frame):
 
     def draw(self, setlim=True):
         """ plot the current variable in the canvas """
+
+        # Don't plot if variable full of Nan
+        if np.count_nonzero(~np.isnan(self.x)) == 0 or \
+           np.count_nonzero(~np.isnan(self.y)) == 0: return
 
         self.canvas.mpl_connect('motion_notify_event', self.ShowPosition)
 
@@ -1078,7 +1076,7 @@ class CrocoGui(wx.Frame):
 
             # Derived variable
             elif self.variableName in self.croco.ListOfDerived:
-                y = np.zeros_like(x)
+                y = np.full_like(x, np.nan)
                 for it in range(len(x)):
                     if 'pv' in self.variableName:
                         y[it] = get_pv(self.croco, it, depth=self.levelIndex,
@@ -1087,6 +1085,8 @@ class CrocoGui(wx.Frame):
                         y[it] = get_zetak(self.croco, it, depth=self.levelIndex)[self.latIndex, self.lonIndex]
                     elif self.variableName == 'dtdz':
                         y[it] = get_dtdz(self.croco, it, depth=self.levelIndex)[self.latIndex, self.lonIndex]
+                    elif self.variableName == 'log(Ri)':
+                        y[it] = get_richardson(self.croco, it, depth=self.levelIndex)[self.latIndex, self.lonIndex]
 
             title = "{:s}, Lon={:4.1f}, Lat={:4.1f}, Level={:4.0f}".\
                 format(self.variableName, self.lon, self.lat, self.depth)
@@ -1152,6 +1152,17 @@ class CrocoGui(wx.Frame):
                             pass
                         y[it] = varz[self.latIndex, self.lonIndex]
 
+                    elif self.variableName == 'log(Ri)':
+                        # Compute pv between these levels
+                        var = get_richardson(self.croco, it, depth=depth, minlev=minlev, maxlev=maxlev)
+                        # Extract the slice of pv corresponding at the depth
+                        try:
+                            varz = self.croco.zslice(var, mask, z[minlev:maxlev, :, :], depth)[0]
+                        except Exception:
+                            print("Not enough points")
+                            pass
+                        y[it] = varz[self.latIndex, self.lonIndex]
+
             title = "{:s}, Lon={:4.1f}, Lat={:4.1f}, depth={:4.1f}".format(self.variableName, self.lon, self.lat, depth)
 
         # Plot the time series
@@ -1203,6 +1214,13 @@ class CrocoGui(wx.Frame):
             elif self.variableName == 'dtdz':
                 x = np.full_like(z, np.nan)
                 var = get_dtdz(self.croco, self.timeIndex,
+                               minlev=0, maxlev=self.croco.wrapper.N - 1,
+                               lonindex=self.lonIndex,)
+                x[1:] = var[:, self.latIndex]
+
+            elif self.variableName == 'log(Ri)':
+                x = np.full_like(z, np.nan)
+                var = get_richardson(self.croco, self.timeIndex,
                                minlev=0, maxlev=self.croco.wrapper.N - 1,
                                lonindex=self.lonIndex,)
                 x[1:] = var[:, self.latIndex]

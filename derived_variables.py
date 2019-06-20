@@ -85,9 +85,9 @@ def calc_ertel(croco, tindex, minlev=None, maxlev=None, lonindex=None, latindex=
     dz = croco.wrapper.scoord2dz_r(ssh, alpha=0., beta=0, lonindex=lonindex,
                                    latindex=latindex)[minlev:maxlev + 1, :]
     u = croco.variables['u'].isel(t=tindex, z_r=slice(minlev, maxlev + 1),
-                                  y_u=slice(minlat, maxlat + 1), x_u=slice(minlon, maxlon)).values
+                                  y_r=slice(minlat, maxlat + 1), x_u=slice(minlon, maxlon)).values
     v = croco.variables['v'].isel(t=tindex, z_r=slice(minlev, maxlev + 1),
-                                  y_v=slice(minlat, maxlat), x_v=slice(minlon, maxlon + 1)).values
+                                  y_v=slice(minlat, maxlat), x_r=slice(minlon, maxlon + 1)).values
     w = croco.variables['w'].isel(t=tindex, z_r=slice(minlev, maxlev + 1),
                                   y_r=slice(minlat, maxlat + 1), x_r=slice(minlon, maxlon + 1))
 
@@ -269,9 +269,9 @@ def calc_zetak(croco, tindex, minlev=None, maxlev=None, lonindex=None, latindex=
     #
 
     u = croco.variables['u'].isel(t=tindex, z_r=slice(minlev, maxlev + 1),
-                                  y_u=slice(minlat, maxlat + 1), x_u=slice(minlon, maxlon)).values
+                                  y_r=slice(minlat, maxlat + 1), x_u=slice(minlon, maxlon)).values
     v = croco.variables['v'].isel(t=tindex, z_r=slice(minlev, maxlev + 1),
-                                  y_v=slice(minlat, maxlat), x_v=slice(minlon, maxlon + 1)).values
+                                  y_v=slice(minlat, maxlat), x_r=slice(minlon, maxlon + 1)).values
 
     #
     #
@@ -339,7 +339,6 @@ def calc_dtdz(croco, tindex, minlev=None, maxlev=None, lonindex=None, latindex=N
         dz = croco.wrapper.scoord2dz_r(ssh, alpha=0., beta=0)[minlev:maxlev + 1, :, :]
         t = croco.variables['temp'].isel(t=tindex, z_r=slice(minlev, maxlev + 1))
     dtdz = np.diff(t, axis=0) / (0.5 * (dz[:-1, :] + dz[1:, :]))
-    print("t ",t.shape)
     return(dtdz)
 
 
@@ -352,14 +351,6 @@ def get_richardson(croco, tindex, depth=None, minlev=None, maxlev=None,
     # mask = croco.wrapper.masks['mask_r']
     # pv = np.full_like(mask,np.nan)
 
-    try:
-        croco.variables['rho']
-        croco.variables['u']
-        croco.variables['v']
-    except Exception:
-        print("No variable rho, u or v in the netcdf file")
-        return
-
     # Ri from level 0 to N at latitude or longitude index
     if depth is None:
         if lonindex is not None:
@@ -368,12 +359,12 @@ def get_richardson(croco, tindex, depth=None, minlev=None, maxlev=None,
             var = np.full((maxlev - minlev, croco.wrapper.L), np.nan)
         var[:, 1:-1] = calc_richardson(croco, tindex, minlev=minlev, maxlev=maxlev,
                                        lonindex=lonindex, latindex=latindex)
+    # pv at depth
     elif depth <= 0:
         var = np.full((maxlev - minlev, croco.wrapper.M, croco.wrapper.L), np.nan)
         var[:, 1:-1, 1:-1] = calc_richardson(croco, tindex, minlev=minlev, maxlev=maxlev)
     # pv on a level
     elif depth > 0:
-        print("depth=",depth)
         var = np.full((croco.wrapper.M, croco.wrapper.L), np.nan)
         var[1:-1, 1:-1] = calc_richardson(croco, tindex,
                                           minlev=int(depth) - 2, maxlev=int(depth) - 1)
@@ -393,6 +384,16 @@ def calc_richardson(croco, tindex, minlev=None, maxlev=None, lonindex=None, lati
     
     """
 
+    # If u or v or rho not in netcdf file, abort
+    try:
+        croco.variables['rho']
+        croco.variables['u']
+        croco.variables['v']
+    except Exception:
+        print("Variable rho, u or v missing in the netcdf file")
+        return
+
+    # Longitude section
     if lonindex is not None:
         ssh = croco.variables['ssh'].isel(t=tindex,
                                           x_r=slice(lonindex - 1, lonindex + 2)).values
@@ -404,7 +405,7 @@ def calc_richardson(croco, tindex, minlev=None, maxlev=None, lonindex=None, lati
                          [:, :, lonindex])
         rho = croco.variables['rho'].isel(t=tindex, z_r=slice(minlev, maxlev + 1), x_r=lonindex)
         u = croco.variables['u'].isel(t=tindex, z_r=slice(minlev, maxlev + 1), x_u=lonindex)
-        v = croco.variables['v'].isel(t=tindex, z_r=slice(minlev, maxlev + 1), x_v=lonindex)
+        v = croco.variables['v'].isel(t=tindex, z_r=slice(minlev, maxlev + 1), x_r=lonindex)
         drhodz = np.diff(rho, axis=0) / np.diff(z_r, axis=0)
         N2 = (-croco.g / croco.rho0) * (drhodz)
         dudz = np.diff(u, axis=0) / np.diff(z_u, axis=0)
@@ -412,6 +413,8 @@ def calc_richardson(croco, tindex, minlev=None, maxlev=None, lonindex=None, lati
         Ri = np.squeeze(np.log10(N2[:, 1:-1] / (
                         (0.5 * (dudz[:, 1:-1] + dudz[:, 1:-1]))**2 +
                         (0.5 * (dvdz[:, :-1] + dvdz[:, 1:]))**2)))
+
+    # Latitude section
     elif latindex is not None:
         ssh = croco.variables['ssh'].isel(t=tindex,
                                           y_r=slice(latindex - 1, latindex + 2)).values
@@ -422,7 +425,7 @@ def calc_richardson(croco, tindex, minlev=None, maxlev=None, lonindex=None, lati
         z_v = np.squeeze(croco. get_coord("v", direction='z', timeIndex=tindex)
                          [:, latindex, :])
         rho = croco.variables['rho'].isel(t=tindex, z_r=slice(minlev, maxlev + 1), y_r=latindex)
-        u = croco.variables['u'].isel(t=tindex, z_r=slice(minlev, maxlev + 1), y_u=latindex)
+        u = croco.variables['u'].isel(t=tindex, z_r=slice(minlev, maxlev + 1), y_r=latindex)
         v = croco.variables['v'].isel(t=tindex, z_r=slice(minlev, maxlev + 1), y_v=latindex)
         drhodz = np.diff(rho, axis=0) / np.diff(z_r, axis=0)
         N2 = (-croco.g / croco.rho0) * (drhodz)
@@ -431,6 +434,8 @@ def calc_richardson(croco, tindex, minlev=None, maxlev=None, lonindex=None, lati
         Ri = np.squeeze(np.log10(N2[:, 1:-1] / (
                         (0.5 * (dudz[:, 1:] + dudz[:, :-1]))**2 +
                         (0.5 * (dvdz[:, 1:-1] + dvdz[:, 1:-1]))**2)))
+
+    # Level or depth section 
     else:
         ssh = croco.variables['ssh'].isel(t=tindex).values
         dz = croco.wrapper.scoord2dz_r(ssh, alpha=0., beta=0)[minlev:maxlev + 1, :, :]

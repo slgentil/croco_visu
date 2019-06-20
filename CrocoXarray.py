@@ -68,7 +68,7 @@ class Croco(object):
 
     def get_variable(self, variableName, tindex=None, xindex=None, yindex=None, zindex=None):
 
-        list = self.variables[variableName].dims
+        dims = self.variables[variableName].dims
 
         variable = self.variables[variableName]
 
@@ -76,49 +76,32 @@ class Croco(object):
             variable = variable.isel(t=tindex)
 
         if xindex is not None:
-            # find x dimension of the variable
-            regex = re.compile(".*(x_).*")
-            dim = [m.group(0) for l in list for m in [regex.search(l)] if m]
             # Extract x slice
             try:
-                if dim[0].find('u') >= 0:
+                if "x_u" in dims:
                     variable = variable.isel(x_u=xindex)
-                elif dim[0].find('v') >= 0:
-                    variable = variable.isel(x_v=xindex)
-                elif dim[0].find('r') >= 0:
+                else:
                     variable = variable.isel(x_r=xindex)
-                elif dim[0].find('w') >= 0:
-                    variable = variable.isel(x_w=xindex)
             except Exception:
                 pass
 
         if yindex is not None:
-            # find y dimension of the variable
-            regex = re.compile(".*(y_).*")
-            dim = [m.group(0) for l in list for m in [regex.search(l)] if m]
             # Extract y slice
             try:
-                if dim[0].find('u') >= 0:
-                    variable = variable.isel(y_u=yindex)
-                elif dim[0].find('v') >= 0:
+                if "y_v" in dims:
                     variable = variable.isel(y_v=yindex)
-                elif dim[0].find('r') >= 0:
+                else:
                     variable = variable.isel(y_r=yindex)
-                elif dim[0].find('w') >= 0:
-                    variable = variable.isel(y_w=yindex)
             except Exception:
                 pass
 
         if zindex is not None:
-            # find z dimension of the variable
-            regex = re.compile(".*(z_).*")
-            dim = [m.group(0) for l in list for m in [regex.search(l)] if m]
-            # Extract y slice
+            # Extract z slice
             try:
-                if dim[0].find('r') >= 0:
-                    variable = variable.isel(z_r=zindex)
-                elif dim[0].find('w') >= 0:
+                if "z_w" in dims:
                     variable = variable.isel(z_w=zindex)
+                else:
+                    variable = variable.isel(z_r=zindex)
             except Exception:
                 pass
 
@@ -131,45 +114,35 @@ class Croco(object):
         """
         # If variable is derived variable, return rho point coordinates
         try:
-            list = self.variables[variableName].dims
+            dims = self.variables[variableName].dims
         except Exception:
             try:
-                list = self.variables['rho'].dims
+                dims = self.variables['rho'].dims
             except Exception:
-                list = self.variables['temp'].dims
+                dims = self.variables['temp'].dims
         if direction == 'x':
-            regex = re.compile(".*(x_).*")
-            coord = [m.group(0) for l in list for m in [regex.search(l)] if m]
-            if coord[0].find('u') >= 0:
+            if "x_u" in dims:
                 return self.wrapper.coords['lon_u']
-            elif coord[0].find('v') >= 0:
+            elif "y_v" in dims:
                 return self.wrapper.coords['lon_v']
-            elif coord[0].find('r') >= 0:
+            else:
                 return self.wrapper.coords['lon_r']
-            elif coord[0].find('w') >= 0:
-                return self.wrapper.coords['lon_w']
         elif direction == 'y':
-            regex = re.compile(".*(y_).*")
-            coord = [m.group(0) for l in list for m in [regex.search(l)] if m]
-            if coord[0].find('u') >= 0:
+            if "x_u" in dims:
                 return self.wrapper.coords['lat_u']
-            elif coord[0].find('v') >= 0:
+            elif "y_v" in dims:
                 return self.wrapper.coords['lat_v']
-            elif coord[0].find('r') >= 0:
+            else:
                 return self.wrapper.coords['lat_r']
-            elif coord[0].find('w') >= 0:
-                return self.wrapper.coords['lat_w']
         elif direction == 'z':
             ssh = self.variables['ssh'].isel(t=timeIndex).values
-            regex = re.compile(".*(z_).*")
-            coord = [m.group(0) for l in list for m in [regex.search(l)] if m]
-            if coord[0].find('r') >= 0:
-                z = self.wrapper.scoord2z_r(ssh, alpha=0., beta=0)
-            elif coord[0].find('w') >= 0:
+            if "z_w" in dims:
                 z = self.wrapper.scoord2z_w(ssh, alpha=0., beta=0)
-            if variableName == "u":
+            else:
+                z = self.wrapper.scoord2z_r(ssh, alpha=0., beta=0)
+            if "x_u" in dims:
                 z = self.rho2u_3d(z)
-            elif variableName == "v":
+            elif "y_v" in dims:
                 z = self.rho2v_3d(z)
             return(z)
         elif direction == 't':
@@ -183,7 +156,6 @@ class Croco(object):
 
         # Create dims
         dims = []
-        # dims = ('t', 'z_r', 'y_r', 'x_r')
         if 't' in dimstyp:
             dims.append('t')
         if 'z' in dimstyp:
@@ -257,15 +229,15 @@ class Croco(object):
 
 
     def rmask(self):
-        return(self.wrapper.masks['mask_r'])
+        return(self.wrapper.masks['mask_r'].values)
 
     def umask(self):
-        return(self.wrapper.masks['mask_r'][:, 1:] *
-               self.wrapper.masks['mask_r'][:, :-1])
+        return(self.wrapper.masks['mask_r'].values[:, 1:] *
+               self.wrapper.masks['mask_r'].values[:, :-1])
 
     def vmask(self):
-        return(self.wrapper.masks['mask_r'][1:, :] *
-               self.wrapper.masks['mask_r'][:-1, :])
+        return(self.wrapper.masks['mask_r'].values[1:, :] *
+               self.wrapper.masks['mask_r'].values[:-1, :])
         
     @staticmethod
     def rho2u_2d(rho_in):
