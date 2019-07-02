@@ -83,7 +83,9 @@ def mypcolor(frame, x, y, z,
              norm=None,
              xlabel=None, ylabel=None, title=None,
              cmap=None, xlog=False, ylog=False,
-             z1=None, z2=None, winsize=None, dpi=80):
+             z1=None, z2=None, 
+             topo=None, nbtopo=None,
+             winsize=None, dpi=80):
 
     zm = ma.masked_invalid(z)
     # # plt.rc('text', usetex=True)
@@ -128,6 +130,11 @@ def mypcolor(frame, x, y, z,
         # level2 = (z2.min() + z2.max())*0.8
         level2 = (z2.min() + 0) * 0.8
         cp2 = ax.contour(x, y, z2, [level2], colors='r', linewidths=2)
+    if topo is not None:
+        # Show isocontour of the topography
+        cp3 = ax.contour(x, y, topo, nbtopo, colors='k', linewidths=0.5)
+        # Show labels
+        # ax.clabel(cp3)
 
     # Add colorbar
     if cformat == 'sci':
@@ -173,13 +180,13 @@ def array2cmap(X):
     r = np.linspace(0., 1., N + 1)
     r = np.sort(np.concatenate((r, r)))[1:-1]
 
-    rd = np.concatenate([[X[i, 0], X[i, 0]] for i in xrange(N)])
-    gr = np.concatenate([[X[i, 1], X[i, 1]] for i in xrange(N)])
-    bl = np.concatenate([[X[i, 2], X[i, 2]] for i in xrange(N)])
+    rd = np.concatenate([[X[i, 0], X[i, 0]] for i in range(N)])
+    gr = np.concatenate([[X[i, 1], X[i, 1]] for i in range(N)])
+    bl = np.concatenate([[X[i, 2], X[i, 2]] for i in range(N)])
 
-    rd = tuple([(r[i], rd[i], rd[i]) for i in xrange(2 * N)])
-    gr = tuple([(r[i], gr[i], gr[i]) for i in xrange(2 * N)])
-    bl = tuple([(r[i], bl[i], bl[i]) for i in xrange(2 * N)])
+    rd = tuple([(r[i], rd[i], rd[i]) for i in range(2 * N)])
+    gr = tuple([(r[i], gr[i], gr[i]) for i in range(2 * N)])
+    bl = tuple([(r[i], bl[i], bl[i]) for i in range(2 * N)])
 
     cdict = {'red': rd, 'green': gr, 'blue': bl}
     return colors.LinearSegmentedColormap('my_colormap', cdict, N)

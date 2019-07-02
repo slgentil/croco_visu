@@ -13,15 +13,7 @@ from io_xarray import return_xarray_dataarray, return_xarray_dataset
 second2hour = 1. / 3600.
 second2day = 1. / 86400.
 
-# Benguela low resolution (43x44x32)
-# path = "/home1/dunree/slgentil/tmp/WORKDIR/CONFIGS/BENGUELA/outputs_frc_croco/"
-# keymap_files = {
-#     'coordinate_file': path + "croco_his.nc",
-#     'metric_file': path + "croco_his.nc",
-#     'mask_file': path + "croco_his.nc",
-#     'variable_file': path + "croco_his.nc"
-# }
-# Benguela higher resolution (169x172x32)
+# Benguela resolution (169x172x32)
 path = "/home1/dunree/slgentil/models/croco/croco_visu/"
 keymap_files = {
     'coordinate_file': path + "croco_his_Y2008.nc",
@@ -52,16 +44,12 @@ keymap_coordinates = {
     'lat_u': 'lat_u',
     'lon_v': 'lon_v',
     'lat_v': 'lat_v',
-    # 'nav_lon_w': 'lon_w',
-    # 'nav_lat_w': 'lat_w',
     'scrum_time': 'time'
 }
 
 
 keymap_variables = {
     'zeta': 'ssh',
-    'ubar' : 'ubar',
-    'vbar' : 'vbar',
     'u': 'u',
     'v': 'v',
     'w': 'w',

@@ -1,4 +1,4 @@
-# Visualization tools for CROCO
+# Python visualization tools for history files from CROCO
 
 
 ## Install Miniconda:
@@ -8,23 +8,24 @@ Install Miniconda3 (See documentation on web site)
 
 Put in your .cshrc
 ```
-source /Users/slgentil/.miniconda2/etc/profile.d/conda.csh
+source path_to_miniconda/etc/profile.d/conda.csh
 ```
 
 ## Installation environnement croco_visu
 ```
 conda update conda
-conda create -n croco_visu -c conda-forge python=2.7 wxpython xarray matplotlib netcdf4 scipy ffmpeg
-conda activate croco_visu
+conda create -n croco_visu -c conda-forge python=3.7 wxpython xarray matplotlib netcdf4 scipy ffmpeg
 ```
 
 
 ## Clone croco_visu from the git repository:
 ```
 git clone https://github.com/slgentil/croco_visu.git
+cd croco_visu
 ```
 
 ## Lancement visualisation
 ```
-python croco_gui.py
+conda activate croco_visu
+python croco_gui_xarray.py
 ```

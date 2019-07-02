@@ -262,7 +262,7 @@ class Croco(object):
         def levloop(rho_in):
             Nlevs, Mshp, Lshp = rho_in.shape
             rho_out = np.zeros((Nlevs, Mshp, Lshp - 1))
-            for k in xrange(Nlevs):
+            for k in range(Nlevs):
                 rho_out[k] = Croco.rho2u_2d(rho_in[k])
             return rho_out
         assert rho_in.ndim == 3, 'rho_in must be 3d'
@@ -291,7 +291,7 @@ class Croco(object):
         def levloop(rho_in):
             Nlevs, Mshp, Lshp = rho_in.shape
             rho_out = np.zeros((Nlevs, Mshp - 1, Lshp))
-            for k in xrange(Nlevs):
+            for k in range(Nlevs):
                 rho_out[k] = Croco.rho2v_2d(rho_in[k])
             return rho_out
         assert rho_in.ndim == 3, 'rho_in must be 3d'
@@ -323,7 +323,7 @@ class Croco(object):
         def _levloop(u_in):
             Nlevs, Mshp, Lshp = u_in.shape
             u_out = np.zeros((Nlevs, Mshp, Lshp + 1))
-            for Nlev in xrange(Nlevs):
+            for Nlev in range(Nlevs):
                 u_out[Nlev] = Croco.u2rho_2d(u_in[Nlev])
             return u_out
         assert u_in.ndim == 3, 'u_in must be 3d'
@@ -355,7 +355,7 @@ class Croco(object):
         def levloop(v_in):
             Nlevs, Mshp, Lshp = v_in.shape
             v_out = np.zeros((Nlevs, Mshp + 1, Lshp))
-            for Nlev in xrange(Nlevs):
+            for Nlev in range(Nlevs):
                 v_out[Nlev] = Croco.v2rho_2d(v_in[Nlev])
             return v_out
         assert v_in.ndim == 3, 'v_in must be 3d'

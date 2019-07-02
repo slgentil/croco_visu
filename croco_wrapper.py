@@ -37,8 +37,6 @@ keymap_coordinates = {
     'nav_lat_u': 'lat_u',
     'nav_lon_v': 'lon_v',
     'nav_lat_v': 'lat_v',
-    'nav_lon_w': 'lon_w',
-    'nav_lat_w': 'lat_w',
     'time_instant': 'time'
 }
 

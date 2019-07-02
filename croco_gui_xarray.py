@@ -50,6 +50,17 @@ class SectionFrame(wx.Frame):
                  sliceIndex=None, timeIndex=None, subscriber=None):
         """ return a SectioFrame instance """
 
+        # Initialize the variables of the class
+        self.croco = croco
+        self.variable = variable
+        self.x = x
+        self.y = y
+        self.variableName = variableName
+        self.typSection = typSection
+        self.sliceCoord = sliceCoord
+        self.sliceIndex = sliceIndex
+        self.timeIndex = timeIndex
+
         # Create the window
         wx.Frame.__init__(self, None, wx.ID_ANY, title='Section')
 
@@ -82,6 +93,10 @@ class SectionFrame(wx.Frame):
         self.MinColorTxt = wx.TextCtrl(self.panel, wx.ID_ANY, "Min Color", style=wx.TE_CENTRE | wx.TE_PROCESS_ENTER)
         self.MaxColorTxt = wx.TextCtrl(self.panel, wx.ID_ANY, "Max Color", style=wx.TE_CENTRE | wx.TE_PROCESS_ENTER)
 
+        if self.typSection == "XY":
+            self.TopoBtn = wx.ToggleButton(self.panel, wx.ID_ANY, "Topo", style=wx.TE_CENTRE | wx.TE_PROCESS_ENTER)
+            self.TopoTxt = wx.TextCtrl(self.panel, wx.ID_ANY, "10", style=wx.TE_CENTRE | wx.TE_PROCESS_ENTER)
+
         # bind the menu event to an event handler
         self.canvas.mpl_connect('button_press_event', self.onFigureClick)
         self.AnimationBtn.Bind(wx.EVT_BUTTON, self.onAnimationBtn)
@@ -101,6 +116,10 @@ class SectionFrame(wx.Frame):
         self.TimeTxt.Bind(wx.EVT_TEXT_ENTER, self.onTimeTxt)
         self.TimePlusBtn.Bind(wx.EVT_BUTTON, self.onTimePlusBtn)
 
+        if self.typSection == "XY":
+            self.TopoBtn.Bind(wx.EVT_TOGGLEBUTTON, self.onTopoBtn)
+            self.TopoTxt.Bind(wx.EVT_TEXT_ENTER, self.onTopoTxt)
+
         self.showPosition = self.CreateStatusBar(2)
         self.showPosition.SetStatusText("x=   , y=  ", 1)
         self.showPosition.SetStatusWidths([-1, 150])
@@ -113,16 +132,7 @@ class SectionFrame(wx.Frame):
         self.pub = Publisher()
         self.pub.register(self.sub, self.sub.update)
 
-        # Initialize the variables of the class
-        self.croco = croco
-        self.variable = variable
-        self.x = x
-        self.y = y
-        self.variableName = variableName
-        self.typSection = typSection
-        self.sliceCoord = sliceCoord
-        self.sliceIndex = sliceIndex
-        self.timeIndex = timeIndex
+        # Set  variables of the class
         if croco is not None:
             self.time = self.croco.wrapper._get_date(self.timeIndex)
             self.TimeTxt.SetValue(str(self.time))
@@ -178,6 +188,10 @@ class SectionFrame(wx.Frame):
         colorSizer.Add(self.MinColorTxt, 0, wx.ALL, 5)
         colorSizer.Add(self.MaxColorTxt, 0, wx.ALL, 5)
 
+        if self.typSection == "XY":
+            colorSizer.Add(self.TopoBtn, 0, wx.ALL, 5)
+            colorSizer.Add(self.TopoTxt, 0, wx.ALL, 5)
+
         topSizer.Add(canvasSizer, 0, wx.CENTER)
         topSizer.Add(timeSizer, 0, wx.ALL | wx.EXPAND, 5)
         topSizer.Add(buttonsSizer, 0, wx.ALL | wx.EXPAND, 5)
@@ -187,6 +201,13 @@ class SectionFrame(wx.Frame):
         topSizer.Fit(self)
 
         self.Layout()
+        
+        if self.typSection == "XY":
+            self.toggletopo = self.TopoBtn.GetValue()
+            self.nbtopo = int(self.TopoTxt.GetValue())
+        else:
+            self.toggletopo = None
+            self.nbtopo = None
 
     # Event handler
 
@@ -382,6 +403,15 @@ class SectionFrame(wx.Frame):
         self.clim[1] = float(self.MaxColorTxt.GetValue())
         self.drawz(setlim=False, setcol=False)
 
+    # Event handler for topography toggle button
+    def onTopoBtn(self, evnet):
+        self.toggletopo = self.TopoBtn.GetValue()
+        self.drawz(setlim=False, setcol=False)
+
+    def onTopoTxt(self, evnet):
+        self.nbtopo = int(self.TopoTxt.GetValue())
+        self.drawz(setlim=False, setcol=False)
+
     #  Methods of class
 
     def updateVariableZ(self, setlim=True):
@@ -397,10 +427,13 @@ class SectionFrame(wx.Frame):
 
             if "x_u" in dims:
                 mask = self.croco.umask()
+                self.topo = self.croco.rho2u_2d(self.croco.wrapper.metrics["h"])
             elif "y_v" in dims:
                 mask = self.croco.vmask()
+                self.topo = self.croco.rho2v_2d(self.croco.wrapper.metrics["h"])
             else:
                 mask = self.croco.rmask()
+                self.topo = self.croco.wrapper.metrics["h"]
             mask = np.where(mask == 0., np.nan, mask)
 
             # Level plot
@@ -502,7 +535,6 @@ class SectionFrame(wx.Frame):
                             pass
             # Draw the new self.variableZ
             self.variableZ.values = mask * self.variableZ.values
-
 
         # Latitude section
         elif self.typSection == "XZ":
@@ -610,6 +642,10 @@ class SectionFrame(wx.Frame):
         if setlim:
             self.xlim = [np.min(self.x), np.max(self.x)]
             self.ylim = [np.min(self.y), np.max(self.y)]
+        if self.typSection == "XY" and self.toggletopo == True:
+            topo = self.topo
+        else:
+            topo = None
         time = str(self.croco.wrapper._get_date(self.timeIndex))
         self.title = "{:s}, {:s}={:4.1f}, Time={:s}".\
             format(self.variableName, self.slice, self.sliceCoord, time)
@@ -619,7 +655,9 @@ class SectionFrame(wx.Frame):
                  ylabel=self.ylabel,
                  xlim=self.xlim,
                  ylim=self.ylim,
-                 clim=self.clim)
+                 clim=self.clim,
+                 topo=topo,
+                 nbtopo=self.nbtopo)
 
         if anim:
             self.movie.grab_frame()
@@ -843,10 +881,6 @@ class CrocoGui(wx.Frame):
         self.TimeSeriesBtn.Bind(wx.EVT_BUTTON, self.onTimeSeriesBtn)
         self.VerticalProfileBtn.Bind(wx.EVT_BUTTON, self.onVerticalProfileBtn)
 
-        self.showPosition = self.CreateStatusBar(2)
-        self.showPosition.SetStatusText("x=   , y=  ", 1)
-        self.showPosition.SetStatusWidths([-1, 150])
-
         # self.__set_properties()
         self.__do_layout()
 
@@ -957,7 +991,7 @@ class CrocoGui(wx.Frame):
         timeMin = self.croco.wrapper._get_date(0)
         timeMax = self.croco.wrapper._get_date(self.croco.wrapper.ntimes - 1)
         self.LabelMinMaxTime.SetLabel("Min/Max Time = " + str(timeMin) + " ... " +
-                                      str(timeMax) + "days")
+                                      str(timeMax) + " days")
         self.TimeTxt.SetValue(str(timeMin))
         self.timeIndex = 0
         self.time = timeMin
@@ -1333,7 +1367,7 @@ if __name__ == "__main__":
             x11 = ctypes.cdll.LoadLibrary('libX11.so')
             x11.XInitThreads()
         except Exception:
-            print "Warning: failed to XInitThreads()"
+            print("Warning: failed to XInitThreads()")
     app = wx.App(False)
     frame = CrocoGui()
     frame.Show()
