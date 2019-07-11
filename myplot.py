@@ -132,7 +132,7 @@ def mypcolor(frame, x, y, z,
         cp2 = ax.contour(x, y, z2, [level2], colors='r', linewidths=2)
     if topo is not None:
         # Show isocontour of the topography
-        cp3 = ax.contour(x, y, topo, nbtopo, colors='k', linewidths=0.5)
+        cp3 = ax.contour(x, y, topo, nbtopo, colors='grey', linewidths=0.5)
         # Show labels
         # ax.clabel(cp3)
 
