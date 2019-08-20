@@ -630,15 +630,16 @@ class SectionFrame(wx.Frame):
         # if self.variableZ.values is None: return
         variableZ = ma.masked_invalid(self.variableZ.values)
         if setcol:
-            self.mincolor = np.min(variableZ)
+            if self.variableName == 'log(Ri)':
+                self.mincolor = -3.2
+                self.maxcolor = 2.
+                
+            else:
+                self.mincolor = np.min(variableZ)
+                self.maxcolor = np.max(variableZ)
             self.MinColorTxt.SetValue('%.2E' % self.mincolor)
-            self.maxcolor = np.max(variableZ)
             self.MaxColorTxt.SetValue('%.2E' % self.maxcolor)
             self.clim = [self.mincolor, self.maxcolor]
-        if self.variableName == 'log(Ri)':
-            self.MinColorTxt.SetValue('%.2E' % -3.2)
-            self.MaxColorTxt.SetValue('%.2E' % 2.)
-            self.clim = [-3.2, 2.]
         if setlim:
             self.xlim = [np.min(self.x), np.max(self.x)]
             self.ylim = [np.min(self.y), np.max(self.y)]

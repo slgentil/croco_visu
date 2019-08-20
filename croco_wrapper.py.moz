@@ -9,10 +9,7 @@ second2day = 1. / 86400.
 
 # path = "./"
 # path = "/home/datawork-lops-osi/cmenesg/moz/moz_256x120_ts5_tb0_hc10_new_skpp_bkpp/t1/CROCO_FILES/"
-# path = "/home/datawork-lops-osi/cmenesg/moz/moz_512x240_ts5_tb0_hc10_new/t1/CROCO_FILES/"
-path = "/home/datawork-lops-osi/cmenesg/moz/moz_512x240_ts5_tb0_hc10_new_GLS_KOMEGA/t1/CROCO_FILES/"
-# path = "/home1/datawork/slgentil/tes1024/t1/CROCO_FILES/"
-
+path = "/home/datawork-lops-osi/cmenesg/moz/moz_512x240_ts5_tb0_hc10_new/t1/CROCO_FILES/"
 keymap_files = {
     'coordinate_file': path + "moz_his.nc",
     'metric_file': path + "moz_his.nc",
