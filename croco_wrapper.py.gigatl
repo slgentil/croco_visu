@@ -8,38 +8,41 @@ from io_xarray import *
 from gridop import *
 from gridop import _get_z
 
-second2hour = 1. / 3600.
 second2day = 1. / 86400.
 
-# Benguela resolution (169x172x32)
-#path = "/home1/dunree/slgentil/models/croco/croco_visu/"
-path = "./"
-files = 'pierrick.nc'
+# path = "./"
+path = "/Users/slgentil/models/croco/gigatl/giga_2004a2014_mean/"
 
+
+# Either a string of the form "dummy*.nc" 
+# or an explicit list of files to open ['dummy1.nc', 'dummy2.nc']
+# files = 'moz_his.nc'
+files = 'GIGATL6_12h_inst_2004-01-15-2004-01-19.nc'
+varnames = ['zeta', 'u', 'v', 'rho']
 
 keymap_dimensions = {
-    'xi_rho': 'x_r',
-    'eta_rho': 'y_r',
-    'xi_u': 'x_u',
-    'y_u': 'y_r',
-    'x_v': 'x_r',
-    'eta_v': 'y_v',
-    'x_w': 'x_r',
-    'y_w': 'y_r',
+    'x_rho': 'x_r',
+    'x_u': 'x_u',
+    'y_rho': 'y_r',
+    'y_v': 'y_v',
     's_rho': 's_r',
     's_w': 's_w',
-    'time': 't'
+    'time_counter': 't'
 }
 
 
 keymap_coordinates = {
-    'lon_rho': 'lon_r',
-    'lat_rho': 'lat_r',
-    'lon_u': 'lon_u',
-    'lat_u': 'lat_u',
-    'lon_v': 'lon_v',
-    'lat_v': 'lat_v',
-    'scrum_time': 'time'
+    'nav_lon_rho': 'lon_r',
+    'nav_lat_rho': 'lat_r',
+    'nav_lon_u': 'lon_u',
+    'nav_lat_u': 'lat_u',
+    'nav_lon_v': 'lon_v',
+    'nav_lat_v': 'lat_v',
+    # 'nav_lon_w': 'lon_w',
+    # 'nav_lat_w': 'lat_w',
+    # 'nav_lon_psi': 'lon_p',
+    # 'nav_lat_psi': 'lat_p',
+    # 'time_instant': 'time'
 }
 
 
@@ -88,11 +91,10 @@ class CrocoWrapper(object):
         self.change_dimensions()
         self.change_metrics()
         self.change_variables()
-        self.change_coordinates()
         self.change_masks()
-        self.change_variables()
+        self.change_coordinates()
+        print(self.ds)
         self.parameters = {}
-        #self.parameters['chunks'] = chunks
 
 
     def __getitem__(self, key):
@@ -109,11 +111,10 @@ class CrocoWrapper(object):
         return self.ds['time'].values[tindex]
 
     def openfiles(self):
-        # self.ds = open_cdf_mfdataset(path+files, chunks={'time_counter': 1, 's_rho':1}).load()
-        self.ds = open_cdf_mfdataset(path+files, chunks={'time': 1}, 
-            drop_variables=['ubar','vbar','sustr','svstr','bvf','temp','salt','w']).load()
-        # self.ds = open_zarr_dataset(path, varnames=varnames,\
-            # chunks={'time_counter': 1, 's_rho':1}).load()
+        # self.ds = open_cdf_mfdataset(path+files, chunks={'time_counter': 1, 's_rho':1})
+        # self.ds = open_cdf_mfdataset(path+files, chunks={'time_counter': 1}).load()
+        self.ds = open_zarr_dataset(path, varnames=varnames,\
+            chunks={'time_counter': 1, 's_rho':1}).load()
 
     def change_dimensions(self):
         ds = self.ds
@@ -137,49 +138,38 @@ class CrocoWrapper(object):
         self.ds = ds
 
     def change_coordinates(self):
-        #ds = return_xarray_dataset(self.keymap_files['coordinate_file'])
         ds = self.ds
-        #ds = self.change_coords(ds)
         for key, val in self.keymap_coordinates.items():
             try:
                 ds = ds.rename({key: val})
             except Exception:
                 pass
 
-        # change nav variables to coordinates        
-        _coords = [d for d in [d for d in ds.data_vars.keys()] if "nav_" in d]
+        # change lon/lat variables to coordinates  
+        _coords = self.keymap_coordinates.values()
         ds = ds.set_coords(_coords) 
-        # change name of new coords
-        for c in ds.coords:
-            new_c = c.replace('nav_lat','lat').replace('nav_lon','lon')
-            ds = ds.rename({c:new_c})
-        
-        # rename coordinates 
-        eta_suff={}
-        for c in ds.coords:
-            new_c = c.replace('nav_lat','lat').replace('nav_lon','lon')
-            ds = ds.rename({c:new_c}) 
 
         # remove coordinates *_1point
         _coords = [d for d in [d for d in ds.coords.keys()] if "_1point" in d]
         ds = ds.drop(_coords)
 
         # Compute  coordinates if zero
-        print(ds)
-        ds.coords['lon_u'] = rho2u(ds.lon_r, ds)
-        ds.coords['lat_u'] = rho2u(ds.lat_r, ds)
-        ds.coords['lon_v'] = rho2v(ds.lon_r, ds)
-        ds.coords['lat_v'] = rho2v(ds.lat_r, ds)
+        if ds.lon_u.min() == ds.lon_u.max(): ds.coords['lon_u'] = rho2u(ds.lon_r, ds)
+        if ds.lat_u.min() == ds.lat_u.max(): ds.coords['lat_u'] = rho2u(ds.lat_r, ds)
+        if ds.lon_v.min() == ds.lon_v.max(): ds.coords['lon_v'] = rho2v(ds.lon_r, ds)
+        if ds.lat_v.min() == ds.lat_v.max(): ds.coords['lat_v'] = rho2v(ds.lat_r, ds)
 
         # Add vertical coordinates
         ds['z_r'] = _get_z(ds).persist()
-        ds['z_w'] = _get_z(ds, vgrid='w').persist()
+        ds['z_w'] = _get_z(ds, vgrid='w').persist()  
+        if 't' not in ds['z_r'].coords: ds['z_r'] = ds['z_r'].expand_dims({'t':1}) 
+        if 't' not in ds['z_w'].coords: ds['z_w'] = ds['z_w'].expand_dims({'t':1}) 
 
-        # # # time = time - time_origin
+        # # time = time - time_origin
         # ds['time'].values = np.array(ds['time'].values, dtype='datetime64[s]') - \
         #     np.array(ds['time'].time_origin, dtype='datetime64[s]')
         # ds['time'].values = ds['time'].values / np.timedelta64(1, 'D')
-        ds['time'].values = ds['time'].values * second2day
+        # ds['time'] = ds['time'] / 86400.
 
         self.ds = ds
 
