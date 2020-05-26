@@ -138,6 +138,8 @@ def _get_z(dsr, zeta=None, h=None, vgrid='r', hgrid='r', vtrans=None, tindex=Non
 
     _h = ds.h if h is None else h
     _zeta = ds.ssh if zeta is None else zeta
+    _h = _h.fillna(0.)
+    _zeta = _zeta.fillna(0.)
 
     # swith horizontal grid if needed (should we use grid.interp instead?)
     if hgrid in ['u','v']:
@@ -163,6 +165,7 @@ def _get_z(dsr, zeta=None, h=None, vgrid='r', hgrid='r', vtrans=None, tindex=Non
     if vtrans == 2:
         z0 = (hc * sc + _h * cs) / (hc + _h)
         z = _zeta + (_zeta + _h) * z0
+        # z = z0 * (_zeta + _h) + _zeta
     else:
         z0 = hc*sc + (_h-hc)*cs
         z = z0 + _zeta*(1+z0/_h)
@@ -173,6 +176,7 @@ def _get_z(dsr, zeta=None, h=None, vgrid='r', hgrid='r', vtrans=None, tindex=Non
     sdims = tuple(filter(None,sdims)) # delete None values
     reordered_dims = tuple(d for d in z.dims if d not in sdims) + sdims
     z = z.transpose(*reordered_dims) 
+
     return z.rename('z_'+vgrid)
 
 
@@ -291,7 +295,8 @@ def section(ds, var, z, longitude=None, latitude=None, depth=None):
         #
         """
 
-        if z.compute().shape != var.compute().shape:
+        # if z.compute().shape != var.compute().shape:
+        if z.shape != var.shape:
             print('slice: var and z shapes are different')
             return
 

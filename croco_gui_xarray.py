@@ -588,6 +588,8 @@ class SectionFrame(wx.Frame):
             self.y = get_coord(self.ds, variableZ, axe='y')
 
         variableZ = ma.masked_invalid(variableZ)
+        x = ma.masked_invalid(self.x)
+        y = ma.masked_invalid(self.y)
 
         # Set min/max for colorbar if setcol is True
         if setcol:
@@ -603,8 +605,10 @@ class SectionFrame(wx.Frame):
 
         # Set min/max for axis if setlim is True
         if setlim:
-            self.xlim = [np.min(self.x.values), np.max(self.x.values)]
-            self.ylim = [np.min(self.y.values), np.max(self.y.values)]
+            # self.xlim = [np.min(self.x.values), np.max(self.x.values)]
+            # self.ylim = [np.min(self.y.values), np.max(self.y.values)]
+            self.xlim = [np.min(x), np.max(x)]
+            self.ylim = [np.min(y), np.max(y)]
         if self.typSection == "XY" and self.toggletopo == True:
             topo = self.topo
         else:
@@ -1246,7 +1250,7 @@ class CrocoGui(wx.Frame):
             self.levelIndex = max(min(int(self.level - 1), self.croco.N - 1),0)
         else:
             z = get_z(self.ds, tindex=self.timeIndex)
-            self.levelIndex = abs(z.isel(x_r=self.latIndex, y_r=self.lonIndex) - self.level).argmin()
+            self.levelIndex = abs(z.isel(x_r=self.lonIndex, y_r=self.latIndex) - self.level).argmin()
 
 
     def drawz(self, typSection=None):

@@ -11,13 +11,10 @@ from gridop import _get_z
 second2day = 1. / 86400.
 
 path = "./"
-# path = "/Users/slgentil/models/croco/gigatl/giga_2004a2014_mean/../"
-
 
 # Either a string of the form "dummy*.nc" 
 # or an explicit list of files to open ['dummy1.nc', 'dummy2.nc']
-files = 'moz_his.nc'
-# files = 'GIGATL6_12h_inst_2004-01-15-2004-01-19.nc'
+files = ['grid.nc','his.nc']
 # varnames = ['zeta', 'u', 'v', 'rho']
 
 keymap_dimensions = {
@@ -111,12 +108,24 @@ class CrocoWrapper(object):
         return self.ds['time'].values[tindex]
 
     def openfiles(self):
-        # self.ds = open_cdf_mfdataset(path+files, chunks={'time_counter': 1, 's_rho':1}).load()
-        self.ds = open_cdf_mfdataset(path+files, chunks={'time_counter': 1},\
-            drop_variables=['lon_rho','lat_rho','lon_u','lat_u','lon_v','lat_v',\
-            'ubar','vbar','sustr','svstr','bvf','temp','salt','w']).load()
-        # self.ds = open_zarr_dataset(path, varnames=varnames,\
-            # chunks={'time_counter': 1, 's_rho':1}).load()
+        # filenames = [path + file for file in files]
+        # suppress grid.nc from list because no time_couneter dimension in it
+        filenames = [item for item in files if 'grid' not in item]
+        ds = open_cdf_mfdataset(filenames, chunks={'time_counter': 1, 's_rho':1},\
+            drop_variables=['lon_rho','lat_rho','lon_u','lat_u','lon_v','lat_v','time'])
+        # open grid.nc and add metrics to dataset
+        gridname = [item for item in files if 'grid' in item][0]
+        gd = xr.open_dataset(gridname, chunks={'s_rho': 1})
+        ds['hc'] = gd.hc
+        ds['h'] = gd.h
+        ds['Vtransform'] = gd.Vtransform
+        ds['sc_r'] = gd.sc_r
+        ds['sc_w'] = gd.sc_w
+        ds['Cs_r'] = gd.Cs_r
+        ds['Cs_w'] = gd.Cs_w
+        ds['angle'] = gd.angle
+        ds['mask_rho'] = gd.mask_rho
+        self.ds = ds
 
     def change_dimensions(self):
         ds = self.ds

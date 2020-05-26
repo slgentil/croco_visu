@@ -32,6 +32,17 @@ def open_cdf_mfdataset(filenames, chunks=None, drop_variables=None, **kwargs):
     ------
     ds : xarray.Dataset
     """
+    # datasets = []
+    # for f in filenames:
+    #     try:
+    #         ds = xr.open_dataset(f, chunks={'time_counter': 1, 's_rho': 1},\
+    #             drop_variables=drop_variables, **kwargs)
+    #     except Exception:
+    #         ds = xr.open_dataset(f, chunks={'s_rho': 1}, \
+    #             drop_variables=drop_variables, **kwargs)
+    #     datasets.append(ds)
+    # ds = xr.merge(datasets, compat='override')
+    # return ds
     return xr.open_mfdataset(filenames, chunks=chunks, drop_variables=drop_variables, **kwargs)
 
 
