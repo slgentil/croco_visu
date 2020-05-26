@@ -125,6 +125,9 @@ class CrocoWrapper(object):
         ds['Cs_w'] = gd.Cs_w
         ds['angle'] = gd.angle
         ds['mask_rho'] = gd.mask_rho
+        ds['pm'] = gd.pm
+        ds['pn'] = gd.pn
+        ds['f'] = gd.f
         self.ds = ds
 
     def change_dimensions(self):
